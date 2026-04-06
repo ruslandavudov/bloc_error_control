@@ -1,3 +1,6 @@
+## 1.1.1
+- fixing dependencies
+
 ## 1.1.0
 - Initial release of split packages.
 - Support for BLoC 9.0.
