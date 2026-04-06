@@ -1,0 +1,7 @@
+builders:
+  error_mapper_builder:
+    import: "package:bloc_error_control/builder.dart"
+    builder_factories: ["errorMapperBuilder"]
+    build_extensions: {".dart": [".error.g.dart"]}
+    auto_apply: dependents
+    build_to: source
