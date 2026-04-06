@@ -31,7 +31,7 @@ class PlainBloc extends Bloc<BenchEvent, BenchState> {
 }
 
 class EnhancedBloc extends Bloc<BenchEvent, BenchState>
-    with BlocErrorHandlerMixin<BenchEvent, BenchState> {
+    with BlocErrorControlMixin<BenchEvent, BenchState> {
   EnhancedBloc() : super(const InitialState()) {
     on<RunEvent>((event, emit) => emit(const DataState()));
   }
@@ -47,7 +47,7 @@ class EnhancedBloc extends Bloc<BenchEvent, BenchState>
 }
 
 class TimeoutBloc extends Bloc<BenchEvent, BenchState>
-    with BlocErrorHandlerMixin<BenchEvent, BenchState> {
+    with BlocErrorControlMixin<BenchEvent, BenchState> {
   TimeoutBloc() : super(const InitialState()) {
     on<RunEvent>(
       (event, emit) => emit(const DataState()),
@@ -84,7 +84,7 @@ class PureBlocBenchmark extends BenchmarkBase {
 }
 
 class EnhancedBlocBenchmark extends BenchmarkBase {
-  EnhancedBlocBenchmark() : super('With ErrorHandlerMixin (100 ev)');
+  EnhancedBlocBenchmark() : super('With ErrorControlMixin (100 ev)');
   late EnhancedBloc bloc;
 
   @override

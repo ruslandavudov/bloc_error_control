@@ -13,7 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BlocErrorHandlerMixin-Demo',
+      title: 'BlocErrorControlMixin-Demo',
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple)),
       home: BlocProvider(lazy: false, create: (context) => UserBloc(), child: const MyHomePage()),
     );

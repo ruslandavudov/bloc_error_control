@@ -23,30 +23,30 @@ class ErrorStateFor {
 
 /// Marks a BLoC class as eligible for error handler code generation.
 ///
-/// Apply this annotation to any BLoC class that uses `BlocErrorHandlerMixin`
+/// Apply this annotation to any BLoC class that uses `BlocErrorControlMixin`
 /// to enable automatic generation of error mapper wiring.
 ///
 /// Example:
 /// ```dart
 /// import 'package:bloc_error_control/annotations.dart';
 ///
-/// @BlocErrorHandler()
+/// @BlocErrorControl()
 /// class UserBloc extends Bloc<UserEvent, UserState>
-///     with BlocErrorHandlerMixin<UserEvent, UserState> {
+///     with BlocErrorControlMixin<UserEvent, UserState> {
 ///   // ...
 /// }
 /// ```
 @Target({TargetKind.classType})
-class BlocErrorHandler {
+class BlocErrorControl {
   /// Creates an annotation for a BLoC class.
-  const BlocErrorHandler();
+  const BlocErrorControl();
 }
 
-/// Constant instance of [BlocErrorHandler] for cleaner annotation syntax.
+/// Constant instance of [BlocErrorControl] for cleaner annotation syntax.
 ///
 /// Use this constant instead of instantiating the class directly:
 /// ```dart
-/// @blocErrorHandler
+/// @blocErrorControl
 /// class UserBloc extends ... { ... }
 /// ```
-const blocErrorHandler = BlocErrorHandler();
+const blocErrorControl = BlocErrorControl();

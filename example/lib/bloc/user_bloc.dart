@@ -40,7 +40,7 @@ class UserError extends UserState {
   UserError(this.message);
 }
 
-@blocErrorHandler
+@blocErrorControl
 class UserBloc extends Bloc<UserEvent, UserState> with _$UserBlocErrorMapper<UserEvent, UserState> {
   UserBloc() : super(UserInitial()) {
     on<UserEvent>(

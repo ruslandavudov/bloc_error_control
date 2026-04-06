@@ -11,7 +11,7 @@ import 'package:meta/meta.dart';
 
 /// Signature for custom error logging functions.
 ///
-/// Used with [BlocErrorHandlerMixin.logger] to provide custom error logging
+/// Used with [BlocErrorControlMixin.logger] to provide custom error logging
 /// (e.g., to Sentry, Firebase, or local analytics).
 typedef ErrorLogger =
     void Function({
@@ -21,7 +21,7 @@ typedef ErrorLogger =
       required Object event,
     });
 
-/// **BlocErrorHandlerMixin** — A powerful engine for automated error handling
+/// **BlocErrorControlMixin** — A powerful engine for automated error handling
 /// and resource management in BLoC.
 ///
 /// This mixin eliminates boilerplate `try-catch` blocks from event handlers
@@ -83,7 +83,7 @@ typedef ErrorLogger =
 ///
 /// ```dart
 /// class UserBloc extends Bloc<UserEvent, UserState>
-///     with BlocErrorHandlerMixin<UserEvent, UserState> {
+///     with BlocErrorControlMixin<UserEvent, UserState> {
 ///
 ///   UserBloc() {
 ///     on<LoadUser>(_onLoadUser);
@@ -129,7 +129,7 @@ typedef ErrorLogger =
 /// └───────────────────────────────────────────────────────────
 /// ```
 // {{REG_BEGIN}}
-mixin BlocErrorHandlerMixin<E extends Object, S> on Bloc<E, S> {
+mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
   static const _eventKey = #app_bloc_handler_event;
   static const _tokenKey = #app_bloc_cancel_token;
   static const _isHandlingErrorKey = #app_bloc_is_handling_error;
@@ -234,7 +234,7 @@ mixin BlocErrorHandlerMixin<E extends Object, S> on Bloc<E, S> {
   /// Returns an event-specific error mapper (used by code generation).
   ///
   /// This method is automatically overridden when using code generation
-  /// with `@BlocErrorHandler` and `@ErrorStateFor` annotations.
+  /// with `@BlocErrorControl` and `@ErrorStateFor` annotations.
   @protected
   S? getErrorMapperForEvent(Object error, StackTrace s, E event) => null;
 

@@ -1,4 +1,4 @@
-# 🛡️ Bloc Error Handler
+# 🛡️ Bloc Error Control
 
 **Продвинутое решение для обработки ошибок и управления жизненным циклом событий в Flutter-приложениях
 на базе BLoC. Пакет превращает хаотичные асинхронные исключения в структурированные состояния,
@@ -74,7 +74,7 @@ on<LoadUser>((event, emit) async {
 
 ```dart
 class UserBloc extends Bloc<UserEvent, UserState>
-    with BlocErrorHandlerMixin<UserEvent, UserState> {
+    with BlocErrorControlMixin<UserEvent, UserState> {
 
   UserBloc() : super(UserInitial()) {
     on<LoadUserEvent>(_onLoadUser);
@@ -120,9 +120,9 @@ Future<void> _onSearch(SearchEvent event, Emitter<SearchState> emit) async {
 ```dart
 import 'package:bloc_error_control/annotations.dart';
 
-@BlocErrorHandler() // ← добавить
+@BlocErrorControl() // ← добавить
 class UserBloc extends Bloc<UserEvent, UserState>
-    with BlocErrorHandlerMixin<UserEvent, UserState> {
+    with BlocErrorControlMixin<UserEvent, UserState> {
   // ...
 }
 ```
@@ -269,7 +269,7 @@ import 'package:bloc_error_control/extensions/dio_cancel_token_extension.dart';
 - Использование
 ```dart
 class UserBloc extends Bloc<UserEvent, UserState>
-    with BlocErrorHandlerMixin<UserEvent, UserState> {
+    with BlocErrorControlMixin<UserEvent, UserState> {
   
   final Dio _dio = Dio();
 

@@ -2,7 +2,7 @@ import 'package:bloc_error_control/src/mixins/bloc_error_control_mixin.dart';
 
 /// Error thrown when an event handler exceeds its timeout limit.
 ///
-/// This error is automatically thrown by [BlocErrorHandlerMixin] when an event
+/// This error is automatically thrown by [BlocErrorControlMixin] when an event
 /// handler takes longer than the specified timeout - duration (default 30 seconds).
 /// The error is then processed through the mixin's error handling pipeline.
 ///

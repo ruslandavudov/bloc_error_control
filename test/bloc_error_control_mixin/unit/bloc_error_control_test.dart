@@ -670,12 +670,12 @@ void main() {
     });
 
     test('BlocErrorHandler should be instantiable', () {
-      const annotation = BlocErrorHandler();
+      const annotation = BlocErrorControl();
       expect(annotation, isNotNull);
     });
 
     test('blocErrorHandler constant should work', () {
-      expect(blocErrorHandler, isA<BlocErrorHandler>());
+      expect(blocErrorControl, isA<BlocErrorControl>());
     });
 
     test('EventCancelToken.fallback should work', () {

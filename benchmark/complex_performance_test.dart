@@ -28,7 +28,7 @@ class DataState extends BenchState {
 }
 
 class FastBloc extends Bloc<BenchEvent, BenchState>
-    with BlocErrorHandlerMixin<BenchEvent, BenchState> {
+    with BlocErrorControlMixin<BenchEvent, BenchState> {
   FastBloc() : super(const InitialState()) {
     on<RunEvent>((event, emit) => emit(DataState(event.id)));
   }

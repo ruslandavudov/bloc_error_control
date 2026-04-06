@@ -5,7 +5,7 @@ import 'package:bloc_error_control/src/annotations/annotations.dart';
 import 'package:build/build.dart';
 import 'package:source_gen/source_gen.dart';
 
-/// Code generator for `@BlocErrorHandler` annotation.
+/// Code generator for `@BlocErrorControl` annotation.
 ///
 /// This generator reads the `bloc_error_control_mixin.dart` template file,
 /// extracts all `@ErrorStateFor` annotated methods from the annotated class,
@@ -14,8 +14,8 @@ import 'package:source_gen/source_gen.dart';
 /// The generated code includes:
 /// - A `getErrorMapperForEvent` method that routes errors to the appropriate mapper
 /// - Proper type casting between event types
-/// - Seamless integration with the `BlocErrorHandlerMixin`
-class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorHandler> {
+/// - Seamless integration with the `BlocErrorControlMixin`
+class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorControl> {
   String? _templateCache;
 
   @override
@@ -120,7 +120,7 @@ class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorHandler> {
 
       final generatedContent = templateBody
           .replaceFirst(
-            'mixin BlocErrorHandlerMixin<E extends Object, S>',
+            'mixin BlocErrorControlMixin<E extends Object, S>',
             'mixin _\$${classElement.name}ErrorMapper<E extends $eType, S extends $sType>',
           )
           .replaceFirst(RegExp(r'// {{MAPPER_REPLACE}}[\s\S]*?// {{MAPPER_REPLACE}}'), mapperCode);

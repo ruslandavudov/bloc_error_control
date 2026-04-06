@@ -7,7 +7,7 @@ import 'package:bloc_error_control/src/mixins/bloc_error_control_mixin.dart';
 /// An extended cancellation token tied to a specific event.
 ///
 /// This token is automatically created for each event dispatched to a BLoC
-/// that uses [BlocErrorHandlerMixin]. It provides event-specific cancellation
+/// that uses [BlocErrorControlMixin]. It provides event-specific cancellation
 /// tracking, diagnostics, and lifecycle management.
 ///
 /// Type parameter [E] represents the event type this token is associated with.
@@ -37,7 +37,7 @@ class EventCancelToken<E> implements ICancelToken {
 
   /// Creates a fallback token for use outside event handlers.
   ///
-  /// Fallback tokens are used when [BlocErrorHandlerMixin.contextToken] is accessed outside
+  /// Fallback tokens are used when [BlocErrorControlMixin.contextToken] is accessed outside
   /// an event handler context (e.g., in debug mode or during testing).
   EventCancelToken.fallback(this._debugName) : event = null, startTime = DateTime.now();
 

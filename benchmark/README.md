@@ -1,7 +1,7 @@
 
-# 🚀 Bloc Error Handler Benchmarks
+# 🚀 Bloc Error Control Benchmarks
 
-This directory contains performance measurement tools for the `BlocErrorHandlerMixin`. Our goal is to ensure that advanced error handling and token management come with near-zero overhead.
+This directory contains performance measurement tools for the `BlocErrorControlMixin`. Our goal is to ensure that advanced error handling and token management come with near-zero overhead.
 
 ## 📊 Current Metrics (v1.0.0)
 Measurements taken on the pure architecture with zero external dependencies.

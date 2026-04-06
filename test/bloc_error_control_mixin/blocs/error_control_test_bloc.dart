@@ -99,7 +99,7 @@ class ConcurrentEvent extends TestEvent with EquatableMixin {
   List<Object?> get props => [id, delay];
 }
 
-/// Test BLoC for validating [BlocErrorHandlerMixin] functionality.
+/// Test BLoC for validating [BlocErrorControlMixin] functionality.
 ///
 /// This bloc is designed to test various error handling scenarios including:
 /// - Success events
@@ -141,7 +141,7 @@ class ConcurrentEvent extends TestEvent with EquatableMixin {
 /// await expectLater(bloc.stream, emits(ErrorState()));
 /// ```
 class ErrorHandlerTestBloc extends Bloc<TestEvent, TestState>
-    with BlocErrorHandlerMixin<TestEvent, TestState> {
+    with BlocErrorControlMixin<TestEvent, TestState> {
   @override
   String get tag => 'ErrorHandlerTestBloc';
 
@@ -206,7 +206,7 @@ class ErrorHandlerTestBloc extends Bloc<TestEvent, TestState>
 
 // Создаём специальный блок для этого теста
 class FailingMapperBloc extends Bloc<TestEvent, TestState>
-    with BlocErrorHandlerMixin<TestEvent, TestState> {
+    with BlocErrorControlMixin<TestEvent, TestState> {
   FailingMapperBloc() : super(InitialState()) {
     on<ErrorEvent>((event, emit) async {
       emit(LoadingState());
