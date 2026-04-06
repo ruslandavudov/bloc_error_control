@@ -1,6 +1,6 @@
 name: bloc_error_control
 description: Declarative error handling for BLoC with Zones and optional code generation
-version: 1.0.0
+version: 1.0.1
 repository: https://github.com/ruslandavudov/bloc_error_control
 issue_tracker: https://github.com/ruslandavudov/bloc_error_control/issues
 
@@ -13,13 +13,13 @@ dependencies:
   build: ^2.4.1
   flutter:
     sdk: flutter
-  flutter_bloc: ^8.1.6
+  flutter_bloc: '>=8.1.6 <10.0.0'
   meta: ^1.10.0
   source_gen: ^1.5.0
 
 dev_dependencies:
   benchmark_harness: ^2.2.0
-  bloc: '>=7.0.0 <10.0.0'
+  bloc: '>=8.0.0 <10.0.0'
   bloc_concurrency: ^0.2.5
   bloc_test: ^9.1.0
   build_runner: ^2.4.0
