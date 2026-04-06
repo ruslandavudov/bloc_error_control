@@ -5,7 +5,6 @@ import 'package:bloc_error_control/src/interfaces/i_cancel_token.dart';
 import 'package:bloc_error_control/src/mixins/bloc_error_control_mixin.dart';
 import 'package:bloc_error_control/src/models/event_cancel_token.dart';
 import 'package:dio/dio.dart';
-import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 abstract class TestState {}
@@ -88,15 +87,12 @@ class ZombieSuccessEvent extends RecoveryEvent {}
 
 class RaceConditionSuccessEvent extends RecoveryEvent {}
 
-class ConcurrentEvent extends TestEvent with EquatableMixin {
+class ConcurrentEvent extends TestEvent {
   final int id;
 
   final Duration delay;
 
   ConcurrentEvent(this.id, {this.delay = const Duration(milliseconds: 50)});
-
-  @override
-  List<Object?> get props => [id, delay];
 }
 
 /// Test BLoC for validating [BlocErrorControlMixin] functionality.

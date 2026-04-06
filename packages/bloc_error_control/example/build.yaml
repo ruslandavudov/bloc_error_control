@@ -1,10 +1,10 @@
 targets:
   $default:
     builders:
-      bloc_error_control|error_mapper_builder:
+      bloc_error_control_generator|error_mapper_builder:
         enabled: true
         generate_for:
           include:
-            - "lib/bloc/*.dart" # Только эта папка
+            - "lib/bloc/*_bloc.dart"
           exclude:
             - "lib/**/*.g.dart"

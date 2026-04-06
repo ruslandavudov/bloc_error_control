@@ -1,3 +1,7 @@
+## 1.1.0
+- Initial release of split packages.
+- Support for BLoC 9.0.
+
 ## 1.0.1
 
 - Updated dependencies to support flutter_bloc 9.x

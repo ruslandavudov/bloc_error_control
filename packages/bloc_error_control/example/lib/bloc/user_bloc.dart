@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bloc_error_control/bloc_error_control.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 part 'user_bloc.error.g.dart';
 

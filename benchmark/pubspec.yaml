@@ -1,0 +1,26 @@
+name: benchmark
+description: "benchmarks"
+version: 1.1.0
+homepage:
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  benchmark_harness: ^2.2.0
+  bloc_error_control:
+    path: ../packages/bloc_error_control/
+  dio: ^5.0.0
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^9.1.1
+
+dev_dependencies:
+  bloc_error_control_generator:
+    path: ../packages/bloc_error_control_generator/
+  build_runner: ^2.4.13
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
