@@ -9,9 +9,9 @@ environment:
 
 dependencies:
   analyzer: '>=6.4.1 <6.9.0'
-#  bloc_error_control: ^1.1.0
-  bloc_error_control:
-    path: ../../packages/bloc_error_control
+  bloc_error_control: ^1.1.0
+#  bloc_error_control:
+#    path: ../../packages/bloc_error_control
 
   build: ^2.4.1
   source_gen: ^1.5.0
