@@ -1,4 +1,4 @@
-// ignore_for_file: depend_on_referenced_packages, implementation_imports
+// ignore_for_file: depend_on_referenced_packages, implementation_imports, deprecated_member_use
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:bloc_error_control/src/annotations/annotations.dart';
@@ -85,10 +85,11 @@ class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorControl> {
       _validate(method, eventTypes);
 
       for (final type in eventTypes) {
+        final methodName = method.name ?? '';
         mappers.add(
           _MapperModel(
             eventTypeName: type.getDisplayString(withNullability: false),
-            methodName: method.name,
+            methodName: methodName,
           ),
         );
       }
@@ -102,8 +103,8 @@ class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorControl> {
             throw InvalidGenerationSourceError('Class ${classElement.name} must extend Bloc'),
       );
 
-      final eType = blocType.typeArguments[0].getDisplayString(withNullability: true);
-      final sType = blocType.typeArguments[1].getDisplayString(withNullability: true);
+      final eType = blocType.typeArguments[0].getDisplayString(withNullability: false);
+      final sType = blocType.typeArguments[1].getDisplayString(withNullability: false);
 
       final mapperCode = '''
   @protected
