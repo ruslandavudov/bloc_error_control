@@ -248,10 +248,11 @@ open coverage/html/index.html
 
 ```yaml
 dependencies:
-  bloc_error_control: ^1.0.0
+  bloc_error_control: ^1.1.0
 
 dev_dependencies:
-  build_runner: ^2.4.0
+  bloc_error_control_generator: ^1.1.0
+  build_runner: ^2.4.13
 ```
 
 ## 🔌 Пример интеграции с Dio для ICancelToken
