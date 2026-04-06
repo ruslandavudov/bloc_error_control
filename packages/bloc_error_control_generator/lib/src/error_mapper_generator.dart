@@ -1,4 +1,4 @@
-// ignore_for_file: depend_on_referenced_packages
+// ignore_for_file: depend_on_referenced_packages, implementation_imports
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:bloc_error_control/src/annotations/annotations.dart';
@@ -105,8 +105,7 @@ class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorControl> {
       final eType = blocType.typeArguments[0].getDisplayString(withNullability: true);
       final sType = blocType.typeArguments[1].getDisplayString(withNullability: true);
 
-      final mapperCode =
-          '''
+      final mapperCode = '''
   @protected
   String get tag => runtimeType.toString();
   
