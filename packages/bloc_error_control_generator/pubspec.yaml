@@ -1,5 +1,5 @@
 name: bloc_error_control_generator
-version: 1.1.1
+version: 1.1.2
 description: Code generator for bloc_error_control
 repository: https://github.com/ruslandavudov/bloc_error_control
 issue_tracker: https://github.com/ruslandavudov/bloc_error_control/issues
