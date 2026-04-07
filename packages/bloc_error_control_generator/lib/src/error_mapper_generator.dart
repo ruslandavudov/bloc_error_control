@@ -62,18 +62,40 @@ class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorControl> {
     for (final method in classElement.methods) {
       final eventTypes = <DartType>[];
       final dynamic rawMetadata = method.metadata;
-      final annotations = (rawMetadata is Iterable)
-          ? rawMetadata.cast<ElementAnnotation>().toList()
-          : <ElementAnnotation>[];
+      List<ElementAnnotation> annotations;
+
+      try {
+        annotations = (rawMetadata as Iterable).cast<ElementAnnotation>().toList();
+      } on Object catch (_) {
+        try {
+          annotations = (rawMetadata.annotations as Iterable).cast<ElementAnnotation>().toList();
+        } on Object catch (_) {
+          annotations = <ElementAnnotation>[];
+          for (var i = 0; i < (rawMetadata.length as int); i++) {
+            annotations.add(rawMetadata[i] as ElementAnnotation);
+          }
+        }
+      }
 
       for (final meta in annotations) {
         final value = meta.computeConstantValue();
-        final typeName = value?.type?.getDisplayString(withNullability: false);
-
-        if (typeName == 'ErrorStateFor') {
-          final typeValue = value?.getField('eventType')?.toTypeValue();
-          if (typeValue != null) {
-            eventTypes.add(typeValue);
+        final type = value?.type;
+        if (type == null) {
+          continue;
+        }
+        final annotationName = meta.element?.displayName ?? '';
+        if (annotationName.contains('ErrorStateFor')) {
+          if (type is InterfaceType && type.typeArguments.isNotEmpty) {
+            final typeArg = type.typeArguments.first;
+            eventTypes.add(typeArg);
+          } else {
+            try {
+              final dynamic metaDynamic = meta;
+              final DartType? typeArg = metaDynamic.typeArguments?.first;
+              if (typeArg != null) {
+                eventTypes.add(typeArg);
+              }
+            } on Object catch (_) {}
           }
         }
       }
@@ -97,11 +119,13 @@ class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorControl> {
 
     // Generate code if mappers were found
     if (mappers.isNotEmpty) {
-      final blocType = classElement.allSupertypes.firstWhere(
-        (t) => t.element.name == 'Bloc',
-        orElse: () =>
-            throw InvalidGenerationSourceError('Class ${classElement.name} must extend Bloc'),
-      );
+      final blocType = classElement.allSupertypes.where((t) {
+        final name = t.element.name ?? '';
+        return name == 'Bloc' || name.contains('Bloc');
+      }).firstOrNull;
+      if (blocType == null) {
+        return null;
+      }
 
       final eType = blocType.typeArguments[0].getDisplayString(withNullability: false);
       final sType = blocType.typeArguments[1].getDisplayString(withNullability: false);
@@ -120,7 +144,7 @@ class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorControl> {
 
       final generatedContent = templateBody
           .replaceFirst(
-            'mixin BlocErrorControlMixin<E extends Object, S>',
+            RegExp(r'mixin\s+BlocErrorControlMixin<E\s+extends\s+Object,\s+S>'),
             'mixin _\$${classElement.name}ErrorMapper<E extends $eType, S extends $sType>',
           )
           .replaceFirst(RegExp(r'// {{MAPPER_REPLACE}}[\s\S]*?// {{MAPPER_REPLACE}}'), mapperCode);
@@ -139,30 +163,60 @@ class ErrorMapperGenerator extends GeneratorForAnnotation<BlocErrorControl> {
   ///
   /// Expected signature: (Object error, StackTrace stack, EventType event)
   void _validate(MethodElement method, List<DartType> eventTypes) {
-    final dynamic parameters =
-        (method as dynamic).parameters ?? (method as dynamic).formalParameters;
+    final dynamic methodElement = method;
+    final dynamic rawParams = _getFormalParameters(methodElement) ?? _getParameters(methodElement);
 
-    if (parameters == null || (parameters.length as int) != 3) {
+    if (rawParams == null) {
       throw InvalidGenerationSourceError(
-        'Method ${method.name} must accept 3 arguments: (Object, StackTrace, Event)',
+        'Failed to retrieve parameters for method ${method.name}. '
+        'Check the version of the analyzer package.',
+        element: method,
+      );
+    }
+    final parameters = (rawParams as Iterable).toList();
+
+    if (parameters.length != 3) {
+      throw InvalidGenerationSourceError(
+        'Method ${method.name} must accept exactly 3 arguments: (Object error, StackTrace stack, T event)',
         element: method,
       );
     }
 
-    final dynamic param3 = parameters[2];
-    final param3Type = param3.type as DartType;
+    final param3 = parameters[2];
+    final param3Type = param3.type;
 
     for (final type in eventTypes) {
+      // Check type compatibility through the library's type system
       final isAssignable = method.library.typeSystem.isAssignableTo(type, param3Type);
 
       if (!isAssignable) {
+        final expectedName = type.getDisplayString(withNullability: false);
+        final actualName = param3Type.getDisplayString(withNullability: false);
+
         throw InvalidGenerationSourceError(
-          'Event ${type.getDisplayString(withNullability: false)} '
-          'cannot be passed to parameter of type '
-          '${param3Type.getDisplayString(withNullability: false)}.',
-          element: param3 as Element,
+          'Error in method ${method.name}:\n'
+          'The annotation expects an event of type [$expectedName],\n'
+          'but the method argument has type [$actualName].\n'
+          'They must be compatible.',
+          element: param3,
         );
       }
+    }
+  }
+
+  dynamic _getFormalParameters(dynamic element) {
+    try {
+      return element.formalParameters;
+    } on Object catch (_) {
+      return null;
+    }
+  }
+
+  dynamic _getParameters(dynamic element) {
+    try {
+      return element.parameters;
+    } on Object catch (_) {
+      return null;
     }
   }
 }
@@ -176,4 +230,8 @@ class _MapperModel {
   final String methodName;
 
   _MapperModel({required this.eventTypeName, required this.methodName});
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

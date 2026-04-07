@@ -7,18 +7,14 @@ import 'package:meta/meta_meta.dart';
 ///
 /// Example:
 /// ```dart
-/// @ErrorStateFor(LoadUserEvent)
+/// @ErrorStateFor<LoadUserEvent>()
 /// UserState? onLoadUserError(Object error, StackTrace stack, LoadUserEvent event) {
 ///   return UserError('Failed to load user ${event.id}');
 /// }
 /// ```
 @Target({TargetKind.method})
-class ErrorStateFor {
-  /// The event type this mapper handles.
-  final Type eventType;
-
-  /// Creates an annotation for an error mapper method.
-  const ErrorStateFor(this.eventType);
+class ErrorStateFor<T> {
+  const ErrorStateFor();
 }
 
 /// Marks a BLoC class as eligible for error handler code generation.

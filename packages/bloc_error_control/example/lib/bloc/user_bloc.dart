@@ -75,8 +75,8 @@ class UserBloc extends Bloc<UserEvent, UserState> with _$UserBlocErrorMapper<Use
     throw Exception('[LoadUser3Event] Test error');
   }
 
-  @ErrorStateFor(LoadUser2Event)
-  @ErrorStateFor(LoadUser3Event)
+  @ErrorStateFor<LoadUser2Event>()
+  @ErrorStateFor<LoadUser3Event>()
   UserState? onLoadUserError(Object error, StackTrace stack, UserEvent event) {
     final message = '[${event.runtimeType}] Local error';
     debugPrint(message);

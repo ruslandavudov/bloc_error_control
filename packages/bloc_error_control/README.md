@@ -130,14 +130,14 @@ class UserBloc extends Bloc<UserEvent, UserState>
 - Add mapper methods with annotation
 
 ```dart
-@ErrorStateFor(LoadUserEvent)
-UserState? onLoadUserError(Object error, StackTrace stack, LoadUserEvent event) {
-  return UserError('Failed to load user ${event.id}');
+@ErrorStateFor<LoadUserEvent>(
+  UserState? onLoadUserError(Object error, StackTrace stack, LoadUserEvent event) {
+  return UserError('Ошибка загрузки пользователя ${event.id}');
 }
 
-@ErrorStateFor(UpdateUserEvent)
+@ErrorStateFor<UpdateUserEvent>()
 UserState? onUpdateUserError(Object error, StackTrace stack, UpdateUserEvent event) {
-  return UserError('Update failed');
+  return UserError('Ошибка обновления');
 }
 ```
 
@@ -249,11 +249,11 @@ Add dependencies to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  bloc_error_control: ^1.1.0
+  bloc_error_control: ^1.1.2
 
 dev_dependencies:
-  bloc_error_control_generator: ^1.1.0
-  build_runner: ^2.4.13
+  bloc_error_control_generator: ^1.1.2
+  build_runner: ^2.10.0
 ```
 
 ## 🔌 Example: Dio Integration for ICancelToken

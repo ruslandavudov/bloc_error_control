@@ -1,3 +1,9 @@
+## 1.1.2
+- Changed ErrorStateFor annotation - now generic
+- Fixed dependencies
+- Updated example project
+- Updated README
+
 ## 1.1.1
 - fixing dependencies
 
@@ -6,13 +12,11 @@
 - Support for BLoC 9.0.
 
 ## 1.0.1
-
 - Updated dependencies to support flutter_bloc 9.x
 - flutter_bloc: '>=8.1.6 <10.0.0'
 - bloc: '>=8.0.0 <10.0.0'
 
 ## 1.0.0
-
 - Initial release
 - Added BlocErrorControlMixin with Zone-based error isolation
 - Added ICancelToken for automatic request cancellation

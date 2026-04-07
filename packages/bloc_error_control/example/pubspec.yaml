@@ -9,7 +9,7 @@ environment:
 
 dependencies:
   bloc_error_control:
-    path: ../
+    path: ../../bloc_error_control/
   dio: ^5.0.0
   flutter:
     sdk: flutter

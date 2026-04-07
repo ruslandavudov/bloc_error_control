@@ -130,12 +130,12 @@ class UserBloc extends Bloc<UserEvent, UserState>
 - Добавьте методы-мапперы с аннотацией
 
 ```dart
-@ErrorStateFor(LoadUserEvent)
+@ErrorStateFor<LoadUserEvent>(
 UserState? onLoadUserError(Object error, StackTrace stack, LoadUserEvent event) {
   return UserError('Ошибка загрузки пользователя ${event.id}');
 }
 
-@ErrorStateFor(UpdateUserEvent)
+@ErrorStateFor<UpdateUserEvent>()
 UserState? onUpdateUserError(Object error, StackTrace stack, UpdateUserEvent event) {
   return UserError('Ошибка обновления');
 }
@@ -248,11 +248,11 @@ open coverage/html/index.html
 
 ```yaml
 dependencies:
-  bloc_error_control: ^1.1.0
+  bloc_error_control: ^1.1.2
 
 dev_dependencies:
-  bloc_error_control_generator: ^1.1.0
-  build_runner: ^2.4.13
+  bloc_error_control_generator: ^1.1.2
+  build_runner: ^2.10.0
 ```
 
 ## 🔌 Пример интеграции с Dio для ICancelToken
