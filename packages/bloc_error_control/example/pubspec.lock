@@ -52,17 +52,19 @@ packages:
   bloc_error_control:
     dependency: "direct main"
     description:
-      path: ".."
-      relative: true
-    source: path
-    version: "1.1.2"
+      name: bloc_error_control
+      sha256: "6dabbe6541ed65fdae05406064afaab8c3451dfe1394f3946b598f255ec77927"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
   bloc_error_control_generator:
     dependency: "direct dev"
     description:
-      path: "../../bloc_error_control_generator"
-      relative: true
-    source: path
-    version: "1.1.2"
+      name: bloc_error_control_generator
+      sha256: "738da731a3380e5a575ad8eeef94b1bf53a680970b25065eee07c9216ac2eabd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
   boolean_selector:
     dependency: transitive
     description:
