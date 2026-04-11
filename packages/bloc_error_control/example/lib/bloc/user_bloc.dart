@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:bloc_error_control/bloc_error_control.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -50,6 +51,7 @@ class UserBloc extends Bloc<UserEvent, UserState> with _$UserBlocErrorMapper<Use
         LoadUser2Event() => _onLoadUser2Event(event, emit),
         LoadUser3Event() => _onLoadUser3Event(event, emit),
       },
+      transformer: sequential(),
     );
   }
 
@@ -66,8 +68,21 @@ class UserBloc extends Bloc<UserEvent, UserState> with _$UserBlocErrorMapper<Use
   }
 
   Future<void> _onLoadUser2Event(LoadUser2Event event, Emitter<UserState> emit) async {
+    final tokens = getActiveTokensInfo();
+    debugPrint(tokens.map((e) => e).join('\n'));
     emit(UserLoading());
-    throw Exception('[LoadUser2Event] Test error');
+
+    String message(int v) => 'signal: LoadUser2Event | $v';
+    final res = message(2);
+    emitSignal(message(1));
+    await contextToken.delay(const Duration(seconds: 1));
+
+    emitSignal(res);
+    await contextToken.delay(const Duration(seconds: 1));
+
+    emit(UserLoaded(res));
+    await contextToken.delay(const Duration(seconds: 1));
+    emitSignal(message(3));
   }
 
   Future<void> _onLoadUser3Event(LoadUser3Event event, Emitter<UserState> emit) async {

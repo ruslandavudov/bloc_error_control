@@ -97,6 +97,72 @@ class UserBloc extends Bloc<UserEvent, UserState>
 }
 ```
 
+## ⚡️ Сигналы (Side Effects)
+**Сигналы** — это механизм для передачи одноразовых событий из `BLoC` в `UI` (показ `Snackbar`, `Toast`, 
+навигация или запуск анимации).
+
+### Какую проблему это решает?
+В стандартном BLoC для показа уведомления об ошибке разработчики часто добавляют поле error в состояние (State). 
+
+**Это приводит к ряду проблем**:
+ - **Sticky State** (Липкая ошибка): При перестроении экрана (например, при повороте) Snackbar 
+показывается снова, так как ошибка всё еще находится в состоянии.
+ - **Загрязнение состояния**: Состояние должно описывать что на экране, а не что произошло один раз.
+
+**Сигналы работают в параллельном потоке**: они не сохраняются в состоянии, доставляются один раз 
+   и автоматически привязываются к контексту события.
+
+### Использование в BLoC
+Чтобы отправить сигнал, используйте метод `emitSignal()`. 
+
+Вы также можете настроить автоматическое превращение ошибок в сигналы через `mapErrorToSignal`.
+
+```dart
+class UserBloc extends Bloc<UserEvent, UserState> with BlocErrorControlMixin<UserEvent, UserState> {
+  UserBloc() : super(UserInitial()) {
+    on<UpdateProfileEvent>((event, emit) async {
+      await repo.updateUser(event.user);
+      // Отправляем сигнал об успехе вручную
+      emitSignal('Профиль успешно обновлен!');
+    });
+  }
+  
+  @override
+  Object? mapErrorToSignal(Object error, StackTrace stack, UserEvent? event) {
+    // Если произошла ошибка при лайке поста — не меняем стейт,
+    // а просто уведомляем пользователя через сигнал
+    if (event is LikePostEvent) {
+      return 'Не удалось поставить лайк. Попробуйте позже.';
+    }
+    return null;
+  }
+}
+```
+
+### Обработка в UI (BlocSignalListener)
+Для прослушивания сигналов используйте специальный виджет `BlocSignalListener`. 
+Благодаря поддержке типов, вы можете слушать сигналы как от всего блока, так и от конкретных событий.
+
+```dart
+// Слушаем сигналы только от события UpdateProfileEvent
+BlocSignalListener<UserBloc, UpdateProfileEvent>(
+  onSignal: (context, signal) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(signal.toString())),
+    );
+  },
+  child: ProfileScreen(),
+)
+```
+
+### Преимущества сигналов в этой библиотеке
+ - **Context-Aware**: Благодаря Zone API, каждый сигнал "знает", внутри какого события он был 
+ отправлен. Это позволяет фильтровать уведомления в UI.
+ - **Авто-отмена**: Если событие было отменено (например, через restartable), все сигналы, которые не 
+   успели отправиться из его асинхронного кода, будут проигнорированы.
+ - **Типобезопасность**: Вы можете передавать в качестве сигнала любые объекты (строки, sealed-классы, 
+   DTO).
+
 ## Поддерживайте отмену запросов (опционально)
 
 ```dart
@@ -130,7 +196,7 @@ class UserBloc extends Bloc<UserEvent, UserState>
 - Добавьте методы-мапперы с аннотацией
 
 ```dart
-@ErrorStateFor<LoadUserEvent>(
+@ErrorStateFor<LoadUserEvent>()
 UserState? onLoadUserError(Object error, StackTrace stack, LoadUserEvent event) {
   return UserError('Ошибка загрузки пользователя ${event.id}');
 }
@@ -248,7 +314,7 @@ open coverage/html/index.html
 
 ```yaml
 dependencies:
-  bloc_error_control: ^1.1.2
+  bloc_error_control: ^1.2.0
 
 dev_dependencies:
   bloc_error_control_generator: ^1.1.2
@@ -260,37 +326,6 @@ dev_dependencies:
 Для удобной работы с Dio HTTP клиентом пакет предоставляет расширение `DioCancelTokenX`, которое конвертирует `ICancelToken` в Dio `CancelToken`.
 
 ### Установка расширения
-
-Расширение находится в файле `lib/extensions/dio_cancel_token_extension.dart`. Скопируйте его в ваш проект или импортируйте из пакета:
-
-```dart
-import 'package:bloc_error_control/extensions/dio_cancel_token_extension.dart';
-```
-
-- Использование
-```dart
-class UserBloc extends Bloc<UserEvent, UserState>
-    with BlocErrorControlMixin<UserEvent, UserState> {
-  
-  final Dio _dio = Dio();
-
-  Future<void> _onLoadUser(LoadUserEvent event, Emitter<UserState> emit) async {
-    emit(UserLoading());
-    
-    final response = await _dio.get(
-      'https://api.example.com/users/${event.id}',
-      cancelToken: contextToken.toDio(), // ← конвертация
-    );
-    
-    emit(UserLoaded(response.data));
-  }
-}
-```
-
-**Расширение автоматически:**
- - Синхронизирует состояние отмены между `ICancelToken` и Dio `CancelToken`
- - Пробрасывает причину отмены (reason) для отладки
- - Безопасно обрабатывает ситуации, когда токен уже отменён
 
 **Полный код расширения:**
 ```dart
@@ -323,6 +358,32 @@ extension DioCancelTokenX on ICancelToken {
   }
 }
 ```
+
+- Использование
+```dart
+class UserBloc extends Bloc<UserEvent, UserState>
+    with BlocErrorControlMixin<UserEvent, UserState> {
+  
+  final Dio _dio = Dio();
+
+  Future<void> _onLoadUser(LoadUserEvent event, Emitter<UserState> emit) async {
+    emit(UserLoading());
+    
+    final response = await _dio.get(
+      'https://api.example.com/users/${event.id}',
+      cancelToken: contextToken.toDio(), // ← конвертация
+    );
+    
+    emit(UserLoaded(response.data));
+  }
+}
+```
+
+**Расширение автоматически:**
+ - Синхронизирует состояние отмены между `ICancelToken` и Dio `CancelToken`
+ - Пробрасывает причину отмены (reason) для отладки
+ - Безопасно обрабатывает ситуации, когда токен уже отменён
+
 
 ## 📄 Лицензия
 MIT © 2025

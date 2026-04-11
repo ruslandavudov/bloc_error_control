@@ -1,3 +1,10 @@
+## 1.2.0
+- Added Signals (Side Effects) support: a parallel stream for one-time events (Snackbars, Navigation, etc.)
+- Added IBlocControl interface: centralized management of signals, tokens, and diagnostics
+- Added mapErrorToSignal: a new declarative way to handle transient errors without changing the business state
+- Added BlocSignalListener widget: context-aware listener for targeted signal handling
+- Improved Zone-based infrastructure: signals are now linked to specific events
+
 ## 1.1.2
 - Changed ErrorStateFor annotation - now generic
 - Fixed dependencies

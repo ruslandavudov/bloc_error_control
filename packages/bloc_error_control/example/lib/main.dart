@@ -1,3 +1,4 @@
+import 'package:bloc_error_control/bloc_error_control.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -38,7 +39,12 @@ class MyHomePage extends StatelessWidget {
             _ => const Text('loading...'),
           };
 
-          return Center(child: child);
+          return BlocSignalListener<UserBloc, LoadUser2Event>(
+            onSignal: (context, signal) {
+              debugPrint('signal: $signal');
+            },
+            child: Center(child: child),
+          );
         },
       ),
       floatingActionButton: Column(

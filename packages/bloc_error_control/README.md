@@ -97,6 +97,73 @@ class UserBloc extends Bloc<UserEvent, UserState>
 }
 ```
 
+## ⚡️ Signals (Side Effects)
+
+**Signals** are a mechanism for transmitting one-time events from `BLoC` to `UI` (showing `Snackbar`, `Toast`, 
+navigation, or triggering an animation).
+
+### What problem does this solve?
+In standard BLoC, to display an error notification, developers often add an `error` field to the State.
+
+**This leads to several problems**:
+
+- **Sticky State**: When the screen rebuilds (e.g., on rotation), the Snackbar appears again because the error is still present in the state.
+- **State Pollution**: The state should describe **what is on the screen**, not **what happened once**.
+
+**Signals operate in a parallel stream**: they are not persisted in the state, are delivered once, and are automatically bound to the event context.
+
+### Usage in BLoC
+
+To send a signal, use the `emitSignal()` method.
+
+You can also configure automatic transformation of errors into signals via `mapErrorToSignal`.
+
+```dart
+class UserBloc extends Bloc<UserEvent, UserState> with BlocErrorControlMixin<UserEvent, UserState> {
+  UserBloc() : super(UserInitial()) {
+    on<UpdateProfileEvent>((event, emit) async {
+      await repo.updateUser(event.user);
+      // Manually send a success signal
+      emitSignal('Profile updated successfully!');
+    });
+  }
+  
+  @override
+  Object? mapErrorToSignal(Object error, StackTrace stack, UserEvent? event) {
+    // If an error occurs while liking a post — don't change the state,
+    // just notify the user via a signal
+    if (event is LikePostEvent) {
+      return 'Failed to like the post. Please try again later.';
+    }
+    return null;
+  }
+}
+```
+
+### Handling in UI (BlocSignalListener)
+
+To listen for signals, use the dedicated `BlocSignalListener` widget. 
+Thanks to type support, you can listen to signals from the entire bloc or from specific events.
+
+```dart
+// Listen only to signals from the UpdateProfileEvent
+BlocSignalListener<UserBloc, UpdateProfileEvent>(
+  onSignal: (context, signal) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(signal.toString())),
+    );
+  },
+  child: ProfileScreen(),
+)
+```
+
+### Advantages of signals in this library
+- **Context-Aware**: Thanks to the Zone API, each signal "knows" which event it was sent from. 
+  This allows filtering notifications in the UI.
+- **Auto-cancellation**: If an event is cancelled (e.g., via restartable), 
+  any signals that haven't been sent from its asynchronous code will be ignored.
+- **Type Safety**: You can pass any objects as signals (strings, sealed classes, DTOs).
+
 ## Support request cancellation (optional)
 
 ```dart
@@ -130,14 +197,14 @@ class UserBloc extends Bloc<UserEvent, UserState>
 - Add mapper methods with annotation
 
 ```dart
-@ErrorStateFor<LoadUserEvent>(
-  UserState? onLoadUserError(Object error, StackTrace stack, LoadUserEvent event) {
-  return UserError('Ошибка загрузки пользователя ${event.id}');
+@ErrorStateFor<LoadUserEvent>()
+UserState? onLoadUserError(Object error, StackTrace stack, LoadUserEvent event) {
+  return UserError('Failed to load user ${event.id}');
 }
 
 @ErrorStateFor<UpdateUserEvent>()
 UserState? onUpdateUserError(Object error, StackTrace stack, UpdateUserEvent event) {
-  return UserError('Ошибка обновления');
+  return UserError('Update failed');
 }
 ```
 
@@ -203,7 +270,7 @@ open coverage/html/index.html
 |:------------------------------------------------------------------|:---------------------|
 | **`S? mapErrorToState(Object error, StackTrace stack, E event)`** | Global error handler |
 
-## Опциональные методы
+## Optional methods
 
 | Method                                                    | Description                            |
 |:----------------------------------------------------------|:---------------------------------------|
@@ -249,49 +316,16 @@ Add dependencies to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  bloc_error_control: ^1.1.2
+  bloc_error_control: ^1.2.0
 
 dev_dependencies:
-  bloc_error_control_generator: ^1.1.2
+  bloc_error_control_generator: ^1.2.0
   build_runner: ^2.10.0
 ```
 
 ## 🔌 Example: Dio Integration for ICancelToken
 
 For convenient integration with the Dio HTTP client, the package provides the `DioCancelTokenX` extension, which converts `ICancelToken` to Dio's `CancelToken`.
-
-### Adding the Extension
-
-The extension is located in `lib/extensions/dio_cancel_token_extension.dart`. Copy it to your project or import it from the package:
-
-```dart
-import 'package:bloc_error_control/extensions/dio_cancel_token_extension.dart';
-```
-
-- Usage
-```dart
-class UserBloc extends Bloc<UserEvent, UserState>
-    with BlocErrorControlMixin<UserEvent, UserState> {
-  
-  final Dio _dio = Dio();
-
-  Future<void> _onLoadUser(LoadUserEvent event, Emitter<UserState> emit) async {
-    emit(UserLoading());
-    
-    final response = await _dio.get(
-      'https://api.example.com/users/${event.id}',
-      cancelToken: contextToken.toDio(), // ← conversion
-    );
-    
-    emit(UserLoaded(response.data));
-  }
-}
-```
-
-**The extension automatically:**
-- Synchronizes the cancellation state between `ICancelToken` and Dio's `CancelToken`
-- Propagates the cancellation reason for debugging purposes
-- Safely handles cases where the token is already cancelled
 
 **Complete extension code:**
 ```dart
@@ -324,6 +358,32 @@ extension DioCancelTokenX on ICancelToken {
   }
 }
 ```
+
+- Usage
+```dart
+class UserBloc extends Bloc<UserEvent, UserState>
+    with BlocErrorControlMixin<UserEvent, UserState> {
+  
+  final Dio _dio = Dio();
+
+  Future<void> _onLoadUser(LoadUserEvent event, Emitter<UserState> emit) async {
+    emit(UserLoading());
+    
+    final response = await _dio.get(
+      'https://api.example.com/users/${event.id}',
+      cancelToken: contextToken.toDio(), // ← conversion
+    );
+    
+    emit(UserLoaded(response.data));
+  }
+}
+```
+
+**The extension automatically:**
+- Synchronizes the cancellation state between `ICancelToken` and Dio's `CancelToken`
+- Propagates the cancellation reason for debugging purposes
+- Safely handles cases where the token is already cancelled
+
 
 ## 📄 License
 

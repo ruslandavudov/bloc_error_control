@@ -664,9 +664,10 @@ void main() {
       await bloc.close();
     });
 
-    test('ErrorStateFor should store event type', () {
-      const annotation = ErrorStateFor(LocalErrorEvent);
-      expect(annotation.eventType, LocalErrorEvent);
+    test('ErrorStateFor should capture event type via generic parameter', () {
+      const annotation = ErrorStateFor<LocalErrorEvent>();
+      expect(annotation.runtimeType.toString(), contains('LocalErrorEvent'));
+      expect(annotation, isA<ErrorStateFor<LocalErrorEvent>>());
     });
 
     test('BlocErrorHandler should be instantiable', () {

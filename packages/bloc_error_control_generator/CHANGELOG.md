@@ -1,3 +1,6 @@
+## 1.2.0
+- Changed dependencies
+
 ## 1.1.2
 - Changed ErrorStateFor annotation - now generic
 - Fixed dependencies

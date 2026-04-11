@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bloc_error_control/src/exceptions/bloc_canceled_exception.dart';
+import 'package:bloc_error_control/src/interfaces/i_bloc_control.dart';
 import 'package:bloc_error_control/src/interfaces/i_cancel_token.dart';
 import 'package:bloc_error_control/src/models/cancel_request_reasons.dart';
 import 'package:bloc_error_control/src/models/event_cancel_token.dart';
@@ -129,7 +130,7 @@ typedef ErrorLogger =
 /// └───────────────────────────────────────────────────────────
 /// ```
 // {{REG_BEGIN}}
-mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
+mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocControl<E, S> {
   static const _eventKey = #app_bloc_handler_event;
   static const _tokenKey = #app_bloc_cancel_token;
   static const _isHandlingErrorKey = #app_bloc_is_handling_error;
@@ -182,30 +183,52 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
     }
   }
 
-  /// **Global error mapper.**
-  ///
-  /// Must be implemented in your Bloc. Define common error-to-state conversion
-  /// logic here, e.g., transforming `SocketException` into an offline state.
-  ///
-  /// This method is called when no local or generated mapper handles the error.
+  final _signalController = StreamController<_SignalEnvelope<E>>.broadcast();
+
+  @override
+  @protected
+  @visibleForTesting
+  void emitSignal(Object signal) {
+    if (_signalController.isClosed || contextToken.isCancelled) {
+      return;
+    }
+
+    final currentEvent = Zone.current[_eventKey];
+    _signalController.add(
+      _SignalEnvelope<E>(
+        signal: signal,
+        event: currentEvent is E ? currentEvent : null,
+      ),
+    );
+  }
+
+  @override
+  Stream<Object> signalsFor<T extends E>() {
+    return _signalController.stream
+        .where((envelope) {
+          if (T != E) {
+            return envelope.event is T;
+          }
+          // For base type E, capture everything
+          return true;
+        })
+        .map((envelope) => envelope.signal);
+  }
+
+  @override
+  @protected
+  @visibleForTesting
+  Object? mapErrorToSignal(Object error, StackTrace stackTrace, E? event) => null;
+
+  @override
   @protected
   @mustBeOverridden
-  @mustCallSuper
   S? mapErrorToState(Object error, StackTrace s, E event);
 
   // Cached token for out-of-zone calls
   EventCancelToken<E>? _fallbackToken;
 
-  /// Returns the [ICancelToken] for the currently executing event.
-  ///
-  /// **Always pass this token to async operations:**
-  /// `repo.getData(token: contextToken)`
-  ///
-  /// The token is automatically cancelled when:
-  /// - The event handler completes
-  /// - An exception occurs
-  /// - A new event of the same type is dispatched (with `restartable`)
-  /// - The BLoC is closed
+  @override
   @protected
   @visibleForTesting
   ICancelToken get contextToken {
@@ -259,6 +282,13 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
     }
 
     _onErrorZone(error, stackTrace);
+    final event = Zone.current[_eventKey] as E?;
+
+    // Attempt to convert error to a signal
+    final errorSignal = mapErrorToSignal(error, stackTrace, event);
+    if (errorSignal != null) {
+      emitSignal(errorSignal);
+    }
 
     // If the error was already handled in the zone, don't bubble to super
     final reportedError = Zone.current[_errorReportedKey];
@@ -412,7 +442,7 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
     }
   }
 
-  /// Cancels all tokens associated with events of a specific type.
+  @override
   @protected
   @visibleForTesting
   void cancelTokensByEventType<T extends E>() {
@@ -425,7 +455,7 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
     }
   }
 
-  /// Cancels the token for a specific event instance.
+  @override
   @protected
   @visibleForTesting
   bool cancelTokenForEvent(E event) {
@@ -441,9 +471,7 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
     return false;
   }
 
-  /// Returns diagnostic information about active tokens.
-  ///
-  /// Useful for debugging hanging requests or monitoring resource usage.
+  @override
   @protected
   @visibleForTesting
   List<Map<String, dynamic>> getActiveTokensInfo() {
@@ -463,7 +491,7 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
         .toList();
   }
 
-  /// Checks whether an active token exists for the given event.
+  @override
   @protected
   @visibleForTesting
   bool hasActiveTokenForEvent(E event) {
@@ -485,7 +513,7 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
 
   @override
   @mustCallSuper
-  Future<void> close() {
+  Future<void> close() async {
     final tokens = [..._activeTokens];
 
     for (final token in tokens) {
@@ -494,6 +522,7 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> {
       }
     }
     _activeTokens.clear();
+    await _signalController.close();
 
     return super.close();
   }
@@ -537,6 +566,14 @@ extension _StreamTakeUntil<T> on Stream<T> {
 
     return controller.stream;
   }
+}
+
+/// Internal container for passing signals with event binding.
+class _SignalEnvelope<E> {
+  final Object signal;
+  final E? event;
+
+  _SignalEnvelope({required this.signal, this.event});
 }
 
 // {{REG_END}}
