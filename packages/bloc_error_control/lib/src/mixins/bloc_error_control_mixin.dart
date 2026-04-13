@@ -64,10 +64,11 @@ typedef ErrorLogger =
 ///    mapper is called next.
 /// 5. **Global Mapper ([mapErrorToState])** — Called if all previous mappers
 ///    returned `null`.
-/// 6. **Reporting Filter** — If an error is successfully transformed into a
-///    state, it's marked with `_errorReportedKey`. This prevents duplicate
-///    logs in [BlocObserver] or Sentry, as [onError] will skip `super.onError`
-///    for marked errors.
+/// 6. **Signals ([mapErrorToSignal])** — Can emit an additional one-time side
+///    effect for the same error without replacing state handling.
+/// 7. **Reporting Flag** — If an error is successfully transformed into a
+///    state, `_errorReportedKey` is set in the guarded zone so nested error
+///    handling stays recursion-safe.
 ///
 /// ## Technical Implementation Details
 ///
@@ -150,7 +151,9 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
         required Object error,
         required StackTrace stackTrace,
         required Object event,
-      }) => debugPrint("[$tag] '${event.runtimeType}'\nError: $error\nStackTrace: $stackTrace");
+      }) => debugPrint(
+        "[$tag] '${event.runtimeType}'\nError: $error\nStackTrace: $stackTrace",
+      );
 
   /// Setter for the error logger.
   ///
@@ -270,7 +273,10 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
     Duration timeout = const Duration(seconds: 30),
   }) => super.on<T>(
     handler,
-    transformer: _errorTransformerZone(base: transformer, eventTimeout: timeout),
+    transformer: _errorTransformerZone(
+      base: transformer,
+      eventTimeout: timeout,
+    ),
   );
 
   @override
@@ -360,7 +366,12 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
                   eventTimeout,
                   onTimeout: (sink) {
                     sink
-                      ..addError(EventTimeoutError<T>(event: event, message: 'Event timeout'))
+                      ..addError(
+                        EventTimeoutError<T>(
+                          event: event,
+                          message: 'Event timeout',
+                        ),
+                      )
                       ..close();
                   },
                 );
@@ -391,7 +402,11 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
           }
         },
         _onErrorZone,
-        zoneValues: {_eventKey: event, _tokenKey: token, _isHandlingErrorKey: false},
+        zoneValues: {
+          _eventKey: event,
+          _tokenKey: token,
+          _isHandlingErrorKey: false,
+        },
       );
 
       // cast<T> is needed to match the signature of EventTransformer in Bloc
@@ -417,7 +432,12 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
         // Log asynchronously to avoid blocking the event flow
         scheduleMicrotask(() {
           try {
-            logger(error: error, stackTrace: stackTrace, tag: tag, event: event);
+            logger(
+              error: error,
+              stackTrace: stackTrace,
+              tag: tag,
+              event: event,
+            );
           } on Object catch (e, s) {
             debugPrint('Failed to log error: $e\nTrace: $s');
           }
@@ -429,10 +449,7 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
           runZoned(
             // ignore: invalid_use_of_visible_for_testing_member
             () => emit(eState),
-            zoneValues: {
-              _isHandlingErrorKey: true,
-              _errorReportedKey: error,
-            },
+            zoneValues: {_isHandlingErrorKey: true, _errorReportedKey: error},
           );
         }
       } on Object catch (e, s) {
@@ -497,7 +514,9 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
   bool hasActiveTokenForEvent(E event) {
     final tokens = [..._activeTokens];
 
-    return tokens.any((token) => identical(token.event, event) && !token.isCancelled);
+    return tokens.any(
+      (token) => identical(token.event, event) && !token.isCancelled,
+    );
   }
 
   void _removeToken(EventCancelToken<E> token) {

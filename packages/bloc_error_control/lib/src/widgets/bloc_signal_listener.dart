@@ -4,7 +4,7 @@ import 'package:bloc_error_control/src/interfaces/i_bloc_control.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-/// Слушает сигналы от блока [B] порожденные событием типа [T].
+/// Listens to signals from bloc [B] produced by events of type [T].
 class BlocSignalListener<B extends IBlocControl<Object?, Object?>, T> extends StatefulWidget {
   final Widget child;
   final void Function(BuildContext context, Object signal) onSignal;

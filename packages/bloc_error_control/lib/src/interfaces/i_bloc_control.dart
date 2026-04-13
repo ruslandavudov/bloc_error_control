@@ -50,8 +50,8 @@ abstract interface class IBlocControl<E extends Object, S> {
   ///
   /// **Error handling order:**
   /// 1. [mapErrorToState] — attempts to convert error to a state
-  /// 2. If returns `null`, [mapErrorToSignal] is called
-  /// 3. If also returns `null` — error is only logged
+  /// 2. [mapErrorToSignal] — can additionally emit a one-time side effect
+  /// 3. If both return `null` — the error is only logged/reported
   ///
   /// **Usage example:**
   /// ```dart
@@ -89,7 +89,8 @@ abstract interface class IBlocControl<E extends Object, S> {
   /// ```
   @protected
   @visibleForTesting
-  Object? mapErrorToSignal(Object error, StackTrace stackTrace, E? event) => null;
+  Object? mapErrorToSignal(Object error, StackTrace stackTrace, E? event) =>
+      null;
 
   /// Returns the [ICancelToken] for the currently executing event.
   ///

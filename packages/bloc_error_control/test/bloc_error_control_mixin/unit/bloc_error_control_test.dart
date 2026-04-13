@@ -8,10 +8,21 @@ import 'package:bloc_error_control/src/models/cancel_request_reasons.dart';
 import 'package:bloc_error_control/src/models/event_cancel_token.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:test/test.dart';
 
 import '../blocs/error_control_test_bloc.dart';
+
+class _CountingBlocObserver extends BlocObserver {
+  int onErrorCalls = 0;
+
+  @override
+  void onError(BlocBase<dynamic> bloc, Object error, StackTrace stackTrace) {
+    onErrorCalls++;
+    super.onError(bloc, error, stackTrace);
+  }
+}
 
 void main() {
   group('BlocExceptionHandlerMixin Integrated Tests', () {
@@ -60,61 +71,67 @@ void main() {
       ]);
     });
 
-    test('Silent: DioExceptionType.cancel is ignored, Bloc remains functional', () async {
-      final states = <TestState>[];
-      final bloc = ErrorHandlerTestBloc();
-      final subscription = bloc.stream.listen(states.add);
+    test(
+      'Silent: DioExceptionType.cancel is ignored, Bloc remains functional',
+      () async {
+        final states = <TestState>[];
+        final bloc = ErrorHandlerTestBloc();
+        final subscription = bloc.stream.listen(states.add);
 
-      // Add silent error event
-      bloc.add(SilentErrorEvent());
+        // Add silent error event
+        bloc.add(SilentErrorEvent());
 
-      // Allow microtask for zone to process the error
-      await Future.delayed(const Duration(milliseconds: 20));
+        // Allow microtask for zone to process the error
+        await Future.delayed(const Duration(milliseconds: 20));
 
-      // Add successful event
-      bloc.add(SuccessEvent());
+        // Add successful event
+        bloc.add(SuccessEvent());
 
-      // Wait for successful event completion
-      await Future.delayed(const Duration(milliseconds: 50));
+        // Wait for successful event completion
+        await Future.delayed(const Duration(milliseconds: 50));
 
-      // Verify: No states from silent error, success states present
-      expect(states, [
-        isA<LoadingState>(), // From SuccessEvent
-        isA<DataState>().having((s) => s.data, 'data', 'Success'),
-      ]);
+        // Verify: No states from silent error, success states present
+        expect(states, [
+          isA<LoadingState>(), // From SuccessEvent
+          isA<DataState>().having((s) => s.data, 'data', 'Success'),
+        ]);
 
-      await subscription.cancel();
-    });
+        await subscription.cancel();
+      },
+    );
 
-    test('Zones: Each event runs in its own zone with unique ICancelToken', () async {
-      final bloc = ErrorHandlerTestBloc();
-      final capturedTokens = <int, ICancelToken>{};
-      final completer = Completer<void>();
+    test(
+      'Zones: Each event runs in its own zone with unique ICancelToken',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        final capturedTokens = <int, ICancelToken>{};
+        final completer = Completer<void>();
 
-      // Register a new event not present in bloc constructor
-      bloc
-        ..on<TokenTestEvent>((event, emit) async {
-          // At this point the mixin has created a zone
-          capturedTokens[event.id] = bloc.contextToken;
+        // Register a new event not present in bloc constructor
+        bloc
+          ..on<TokenTestEvent>((event, emit) async {
+            // At this point the mixin has created a zone
+            capturedTokens[event.id] = bloc.contextToken;
 
-          if (capturedTokens.length == 2) {
-            completer.complete();
-          }
-        }, transformer: sequential())
-        ..add(TokenTestEvent(1))
-        ..add(TokenTestEvent(2));
+            if (capturedTokens.length == 2) {
+              completer.complete();
+            }
+          }, transformer: sequential())
+          ..add(TokenTestEvent(1))
+          ..add(TokenTestEvent(2));
 
-      await completer.future.timeout(const Duration(seconds: 1));
-      await bloc.close();
+        await completer.future.timeout(const Duration(seconds: 1));
+        await bloc.close();
 
-      expect(capturedTokens[1], isNotNull);
-      expect(capturedTokens[2], isNotNull);
-      expect(
-        capturedTokens[1],
-        isNot(same(capturedTokens[2])),
-        reason: 'Each event execution must have its own unique ICancelToken instance',
-      );
-    });
+        expect(capturedTokens[1], isNotNull);
+        expect(capturedTokens[2], isNotNull);
+        expect(
+          capturedTokens[1],
+          isNot(same(capturedTokens[2])),
+          reason: 'Each event execution must have its own unique ICancelToken instance',
+        );
+      },
+    );
 
     blocTest<ErrorHandlerTestBloc, TestState>(
       'Sequential: Events must execute strictly in order (mixin preserves ordering)',
@@ -133,181 +150,200 @@ void main() {
       ],
     );
 
-    test('Sequential: Guaranteed sequential execution (no zone overlap)', () async {
-      final bloc = ErrorHandlerTestBloc();
-      final timestamps = <int, Map<String, DateTime>>{};
-      final completer = Completer<void>();
+    test(
+      'Sequential: Guaranteed sequential execution (no zone overlap)',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        final timestamps = <int, Map<String, DateTime>>{};
+        final completer = Completer<void>();
 
-      bloc
-        ..on<CustomSequentialEvent>((event, emit) async {
-          timestamps[event.id] = {'start': DateTime.now()};
-
-          emit(LoadingState());
-          await Future.delayed(const Duration(milliseconds: 50));
-
-          emit(DataState(event.id));
-          timestamps[event.id]!['end'] = DateTime.now();
-
-          if (timestamps.length == 2) {
-            completer.complete();
-          }
-        }, transformer: sequential())
-        ..add(CustomSequentialEvent(1))
-        ..add(CustomSequentialEvent(2));
-
-      await completer.future.timeout(const Duration(seconds: 1));
-
-      final end1 = timestamps[1]!['end']!;
-      final start2 = timestamps[2]!['start']!;
-
-      expect(
-        start2.isAfter(end1) || start2.isAtSameMomentAs(end1),
-        isTrue,
-        reason: 'Second event started before first completed. Sequential is broken!',
-      );
-
-      expect(bloc.state, isA<DataState>().having((s) => s.data, 'data', 2));
-    });
-
-    test('Debounce: Guaranteed atomic execution and no unnecessary zones', () async {
-      final bloc = ErrorHandlerTestBloc();
-      final executionLog = <int>[];
-      final capturedTokens = <int, ICancelToken>{};
-      final completer = Completer<void>();
-
-      bloc
-        ..on<DebounceEvent>(
-          (event, emit) async {
-            final id = event.id;
-            executionLog.add(id);
-            capturedTokens[id] = bloc.contextToken;
+        bloc
+          ..on<CustomSequentialEvent>((event, emit) async {
+            timestamps[event.id] = {'start': DateTime.now()};
 
             emit(LoadingState());
-            await Future.delayed(const Duration(milliseconds: 10));
-            emit(DataState('Result $id'));
+            await Future.delayed(const Duration(milliseconds: 50));
 
-            if (id == 3) {
+            emit(DataState(event.id));
+            timestamps[event.id]!['end'] = DateTime.now();
+
+            if (timestamps.length == 2) {
               completer.complete();
             }
-          },
-          transformer: (events, mapper) =>
-              events.debounceTime(const Duration(milliseconds: 100)).flatMap(mapper),
-        )
-        ..add(DebounceEvent(1));
-      await Future.delayed(const Duration(milliseconds: 30));
-      bloc.add(DebounceEvent(2));
-      await Future.delayed(const Duration(milliseconds: 30));
-      bloc.add(DebounceEvent(3));
+          }, transformer: sequential())
+          ..add(CustomSequentialEvent(1))
+          ..add(CustomSequentialEvent(2));
 
-      await completer.future.timeout(const Duration(milliseconds: 500));
+        await completer.future.timeout(const Duration(seconds: 1));
 
-      // Only ID 3 should be in execution log
-      expect(
-        executionLog,
-        [3],
-        reason: 'Events 1 and 2 must be filtered out before entering execution zone',
-      );
+        final end1 = timestamps[1]!['end']!;
+        final start2 = timestamps[2]!['start']!;
 
-      // Verify no unnecessary tokens were created
-      expect(capturedTokens.containsKey(1), isFalse);
-      expect(capturedTokens.containsKey(2), isFalse);
-      expect(capturedTokens.containsKey(3), isTrue);
+        expect(
+          start2.isAfter(end1) || start2.isAtSameMomentAs(end1),
+          isTrue,
+          reason: 'Second event started before first completed. Sequential is broken!',
+        );
 
-      expect(bloc.state, isA<DataState>().having((s) => s.data, 'data', 'Result 3'));
-    });
+        expect(bloc.state, isA<DataState>().having((s) => s.data, 'data', 2));
+      },
+    );
 
-    test('Restartable: Guaranteed async call interruption via ICancelToken', () async {
-      final bloc = ErrorHandlerTestBloc();
-      final completer = Completer<void>();
-      var firstRequestInterrupted = false;
+    test(
+      'Debounce: Guaranteed atomic execution and no unnecessary zones',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        final executionLog = <int>[];
+        final capturedTokens = <int, ICancelToken>{};
+        final completer = Completer<void>();
 
-      // Используем уникальное событие для теста
-      bloc
-        ..on<RecoveryEvent>((event, emit) async {
-          emit(LoadingState());
+        bloc
+          ..on<DebounceEvent>(
+            (event, emit) async {
+              final id = event.id;
+              executionLog.add(id);
+              capturedTokens[id] = bloc.contextToken;
 
-          if (event is RecoveryErrorEvent) {
-            try {
-              // Simulate Dio request: wait for either delay or token cancellation
-              await Future.any([
-                Future.delayed(const Duration(milliseconds: 200)),
-                bloc.contextToken.whenCancel.then(
-                  (_) => throw DioException(
-                    requestOptions: RequestOptions(),
-                    type: DioExceptionType.cancel,
-                  ),
-                ),
-              ]);
-            } on DioException catch (e) {
-              if (e.type == DioExceptionType.cancel) {
-                firstRequestInterrupted = true;
+              emit(LoadingState());
+              await Future.delayed(const Duration(milliseconds: 10));
+              emit(DataState('Result $id'));
+
+              if (id == 3) {
+                completer.complete();
               }
-              rethrow;
+            },
+            transformer: (events, mapper) =>
+                events.debounceTime(const Duration(milliseconds: 100)).flatMap(mapper),
+          )
+          ..add(DebounceEvent(1));
+        await Future.delayed(const Duration(milliseconds: 30));
+        bloc.add(DebounceEvent(2));
+        await Future.delayed(const Duration(milliseconds: 30));
+        bloc.add(DebounceEvent(3));
+
+        await completer.future.timeout(const Duration(milliseconds: 500));
+
+        // Only ID 3 should be in execution log
+        expect(
+          executionLog,
+          [3],
+          reason: 'Events 1 and 2 must be filtered out before entering execution zone',
+        );
+
+        // Verify no unnecessary tokens were created
+        expect(capturedTokens.containsKey(1), isFalse);
+        expect(capturedTokens.containsKey(2), isFalse);
+        expect(capturedTokens.containsKey(3), isTrue);
+
+        expect(
+          bloc.state,
+          isA<DataState>().having((s) => s.data, 'data', 'Result 3'),
+        );
+      },
+    );
+
+    test(
+      'Restartable: Guaranteed async call interruption via ICancelToken',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        final completer = Completer<void>();
+        var firstRequestInterrupted = false;
+
+        // Используем уникальное событие для теста
+        bloc
+          ..on<RecoveryEvent>((event, emit) async {
+            emit(LoadingState());
+
+            if (event is RecoveryErrorEvent) {
+              try {
+                // Simulate Dio request: wait for either delay or token cancellation
+                await Future.any([
+                  Future.delayed(const Duration(milliseconds: 200)),
+                  bloc.contextToken.whenCancel.then(
+                    (_) => throw DioException(
+                      requestOptions: RequestOptions(),
+                      type: DioExceptionType.cancel,
+                    ),
+                  ),
+                ]);
+              } on DioException catch (e) {
+                if (e.type == DioExceptionType.cancel) {
+                  firstRequestInterrupted = true;
+                }
+                rethrow;
+              }
             }
-          }
 
-          if (event is RecoverySuccessEvent) {
-            await Future.delayed(const Duration(milliseconds: 20));
-            emit(DataState(2));
-            completer.complete();
-          }
-        }, transformer: restartable())
-        ..add(RecoveryErrorEvent());
-      await Future.delayed(const Duration(milliseconds: 20));
+            if (event is RecoverySuccessEvent) {
+              await Future.delayed(const Duration(milliseconds: 20));
+              emit(DataState(2));
+              completer.complete();
+            }
+          }, transformer: restartable())
+          ..add(RecoveryErrorEvent());
+        await Future.delayed(const Duration(milliseconds: 20));
 
-      bloc.add(RecoverySuccessEvent());
+        bloc.add(RecoverySuccessEvent());
 
-      await completer.future.timeout(const Duration(seconds: 1));
+        await completer.future.timeout(const Duration(seconds: 1));
 
-      expect(
-        firstRequestInterrupted,
-        isTrue,
-        reason: 'First event async operation must be interrupted',
-      );
+        expect(
+          firstRequestInterrupted,
+          isTrue,
+          reason: 'First event async operation must be interrupted',
+        );
 
-      expect(bloc.state, isA<DataState>().having((s) => s.data, 'data', 2));
-    });
+        expect(bloc.state, isA<DataState>().having((s) => s.data, 'data', 2));
+      },
+    );
 
-    test('Close: Guaranteed cancellation of all active operations on Bloc disposal', () async {
-      final bloc = ErrorHandlerTestBloc();
-      ICancelToken? activeToken;
-      var isAsyncOperationInterrupted = false;
+    test(
+      'Close: Guaranteed cancellation of all active operations on Bloc disposal',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        ICancelToken? activeToken;
+        var isAsyncOperationInterrupted = false;
 
-      bloc
-        ..on<CancelableEvent>((event, emit) async {
-          activeToken = bloc.contextToken;
-          emit(LoadingState());
+        bloc
+          ..on<CancelableEvent>((event, emit) async {
+            activeToken = bloc.contextToken;
+            emit(LoadingState());
 
-          try {
-            await bloc.contextToken.whenCancel.then((_) {
-              isAsyncOperationInterrupted = true;
-              throw Exception('Cancelled');
-            });
-          } on Object catch (_) {
-            // Error caught by mixin zone
-          }
-        })
-        ..add(CancelableEvent());
-      await Future.delayed(const Duration(milliseconds: 10));
+            try {
+              await bloc.contextToken.whenCancel.then((_) {
+                isAsyncOperationInterrupted = true;
+                throw Exception('Cancelled');
+              });
+            } on Object catch (_) {
+              // Error caught by mixin zone
+            }
+          })
+          ..add(CancelableEvent());
+        await Future.delayed(const Duration(milliseconds: 10));
 
-      final token = activeToken;
-      expect(token, isNotNull);
-      expect(token!.isCancelled, isFalse, reason: 'Token must be active while Bloc is running');
+        final token = activeToken;
+        expect(token, isNotNull);
+        expect(
+          token!.isCancelled,
+          isFalse,
+          reason: 'Token must be active while Bloc is running',
+        );
 
-      await bloc.close();
+        await bloc.close();
 
-      expect(
-        token.isCancelled,
-        isTrue,
-        reason: 'close() must cancel all active event tokens',
-      );
+        expect(
+          token.isCancelled,
+          isTrue,
+          reason: 'close() must cancel all active event tokens',
+        );
 
-      expect(
-        isAsyncOperationInterrupted,
-        isTrue,
-        reason: 'Async operation must be interrupted by cancellation signal on Bloc close',
-      );
-    });
+        expect(
+          isAsyncOperationInterrupted,
+          isTrue,
+          reason: 'Async operation must be interrupted by cancellation signal on Bloc close',
+        );
+      },
+    );
 
     test('Infinite Stream: Guaranteed iterator stop via ICancelToken', () async {
       final bloc = ErrorHandlerTestBloc();
@@ -359,107 +395,125 @@ void main() {
       );
     });
 
-    test('Recursion Guard: Protection against infinite loop (via logger failure)', () async {
-      var loggerCalls = 0;
-      final bloc = ErrorHandlerTestBloc()
-        ..on<RecoveryErrorEvent>((event, emit) async {
-          await Future.delayed(const Duration(milliseconds: 10));
-          throw Exception('Primary error');
-        })
-        ..logger = ({required tag, required error, required event, required stackTrace}) {
-          loggerCalls++;
-          throw Exception('Error inside logger!');
-        }
-        ..add(RecoveryErrorEvent());
+    test(
+      'Recursion Guard: Protection against infinite loop (via logger failure)',
+      () async {
+        var loggerCalls = 0;
+        final bloc = ErrorHandlerTestBloc()
+          ..on<RecoveryErrorEvent>((event, emit) async {
+            await Future.delayed(const Duration(milliseconds: 10));
+            throw Exception('Primary error');
+          })
+          ..logger =
+              ({
+                required tag,
+                required error,
+                required event,
+                required stackTrace,
+              }) {
+                loggerCalls++;
+                throw Exception('Error inside logger!');
+              }
+          ..add(RecoveryErrorEvent());
 
-      await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 100));
 
-      // Thanks to Zone.current[_isHandlingErrorKey], recursive call
-      // from logger error is blocked
-      expect(loggerCalls, 1, reason: 'Recursive logger call must be blocked');
+        // Thanks to Zone.current[_isHandlingErrorKey], recursive call
+        // from logger error is blocked
+        expect(loggerCalls, 1, reason: 'Recursive logger call must be blocked');
 
-      await bloc.close();
-    });
+        await bloc.close();
+      },
+    );
 
-    test('runZonedGuarded: Confirmation of active zone in async context', () async {
-      final bloc = ErrorHandlerTestBloc();
-      ICancelToken? originalToken;
-      ICancelToken? capturedToken;
-      final completer = Completer<void>();
+    test(
+      'runZonedGuarded: Confirmation of active zone in async context',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        ICancelToken? originalToken;
+        ICancelToken? capturedToken;
+        final completer = Completer<void>();
 
-      bloc
-        ..on<RecoveryErrorEvent>((event, emit) async {
-          originalToken = bloc.contextToken;
+        bloc
+          ..on<RecoveryErrorEvent>((event, emit) async {
+            originalToken = bloc.contextToken;
 
-          scheduleMicrotask(() {
-            try {
-              capturedToken = bloc.contextToken;
-            } on Object catch (_) {
-              //
-            }
-            if (!completer.isCompleted) {
-              completer.complete();
-            }
-          });
+            scheduleMicrotask(() {
+              try {
+                capturedToken = bloc.contextToken;
+              } on Object catch (_) {
+                //
+              }
+              if (!completer.isCompleted) {
+                completer.complete();
+              }
+            });
 
-          await Future.delayed(const Duration(milliseconds: 50));
-        })
-        ..add(RecoveryErrorEvent());
+            await Future.delayed(const Duration(milliseconds: 50));
+          })
+          ..add(RecoveryErrorEvent());
 
-      await completer.future.timeout(const Duration(seconds: 1));
+        await completer.future.timeout(const Duration(seconds: 1));
 
-      expect(
-        capturedToken,
-        isNotNull,
-        reason: 'Microtask lost mixin zone and could not find contextToken',
-      );
+        expect(
+          capturedToken,
+          isNotNull,
+          reason: 'Microtask lost mixin zone and could not find contextToken',
+        );
 
-      expect(
-        capturedToken,
-        same(originalToken),
-        reason: 'Microtask must be in the same zone as the main event',
-      );
+        expect(
+          capturedToken,
+          same(originalToken),
+          reason: 'Microtask must be in the same zone as the main event',
+        );
 
-      await bloc.close();
-    });
+        await bloc.close();
+      },
+    );
 
-    test('Zombie Emits: Async code after zone closure must not change state', () async {
-      final bloc = ErrorHandlerTestBloc();
-      final states = <TestState>[];
-      final sub = bloc.stream.listen(states.add);
+    test(
+      'Zombie Emits: Async code after zone closure must not change state',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        final states = <TestState>[];
+        final sub = bloc.stream.listen(states.add);
 
-      bloc
-        ..on<ZombieSuccessEvent>((event, emit) async {
-          Timer(const Duration(milliseconds: 50), () {
-            emit(DataState('Zombie'));
-          });
+        bloc
+          ..on<ZombieSuccessEvent>((event, emit) async {
+            Timer(const Duration(milliseconds: 50), () {
+              emit(DataState('Zombie'));
+            });
 
-          emit(DataState('Alive'));
-        })
-        ..add(ZombieSuccessEvent());
+            emit(DataState('Alive'));
+          })
+          ..add(ZombieSuccessEvent());
 
-      await Future.delayed(const Duration(milliseconds: 100));
-      await sub.cancel();
+        await Future.delayed(const Duration(milliseconds: 100));
+        await sub.cancel();
 
-      expect(states, [
-        isA<DataState>().having((s) => s.data, 'data', 'Alive'),
-      ], reason: 'State from stale timer must not enter stream');
-    });
+        expect(states, [
+          isA<DataState>().having((s) => s.data, 'data', 'Alive'),
+        ], reason: 'State from stale timer must not enter stream');
+      },
+    );
 
-    test('Race Condition: Proper completion when closing Bloc during emit', () async {
-      final bloc = ErrorHandlerTestBloc()
-        ..on<RaceConditionSuccessEvent>((event, emit) async {
-          emit(LoadingState());
-          await Future.delayed(Duration.zero);
-          emit(DataState('Data'));
-        })
-        ..add(RaceConditionSuccessEvent());
+    test(
+      'Race Condition: Proper completion when closing Bloc during emit',
+      () async {
+        final bloc = ErrorHandlerTestBloc()
+          ..on<RaceConditionSuccessEvent>((event, emit) async {
+            emit(LoadingState());
+            await Future.delayed(Duration.zero);
+            emit(DataState('Data'));
+          })
+          ..add(RaceConditionSuccessEvent());
 
-      await expectLater(bloc.close(), completes);
+        await expectLater(bloc.close(), completes);
 
-      expect(bloc.isClosed, isTrue);
-      // No "StateError: Cannot emit new states after calling close" error
-    });
+        expect(bloc.isClosed, isTrue);
+        // No "StateError: Cannot emit new states after calling close" error
+      },
+    );
 
     test('Must withstand 1000 sequential errors', () async {
       final bloc = ErrorHandlerTestBloc()
@@ -489,99 +543,121 @@ void main() {
           .firstWhere((state) => state is LocalErrorState)
           .timeout(const Duration(milliseconds: 500));
 
-      expect(states, [
-        isA<LoadingState>(),
-        isA<LocalErrorState>(),
-      ]);
+      expect(states, [isA<LoadingState>(), isA<LocalErrorState>()]);
 
       await sub.cancel();
       await bloc.close();
     });
 
-    test('Hierarchy: Global mapper triggers when Local mapper returns null', () async {
-      final states = <TestState>[];
-      final bloc = ErrorHandlerTestBloc();
-      final sub = bloc.stream.listen(states.add);
+    test(
+      'Hierarchy: Global mapper triggers when Local mapper returns null',
+      () async {
+        final states = <TestState>[];
+        final bloc = ErrorHandlerTestBloc();
+        final sub = bloc.stream.listen(states.add);
 
-      bloc
-        ..on<RecoveryErrorEvent>((event, emit) async {
-          emit(LoadingState());
-          throw Exception('Fail');
-        })
-        ..add(RecoveryErrorEvent());
+        bloc
+          ..on<RecoveryErrorEvent>((event, emit) async {
+            emit(LoadingState());
+            throw Exception('Fail');
+          })
+          ..add(RecoveryErrorEvent());
 
-      await bloc.stream
-          .firstWhere((state) => state is ErrorState)
-          .timeout(const Duration(milliseconds: 500));
+        await bloc.stream
+            .firstWhere((state) => state is ErrorState)
+            .timeout(const Duration(milliseconds: 500));
 
-      expect(states, [
-        isA<LoadingState>(),
-        isA<ErrorState>(),
-      ]);
+        expect(states, [isA<LoadingState>(), isA<ErrorState>()]);
 
-      await sub.cancel();
-      await bloc.close();
-    });
+        await sub.cancel();
+        await bloc.close();
+      },
+    );
 
-    test('Silent Mapper: Bloc does not change state when mappers return null', () async {
-      final states = <TestState>[];
-      final bloc = ErrorHandlerTestBloc();
-      final sub = bloc.stream.listen(states.add);
+    test(
+      'Silent Mapper: Bloc does not change state when mappers return null',
+      () async {
+        final states = <TestState>[];
+        final bloc = ErrorHandlerTestBloc();
+        final sub = bloc.stream.listen(states.add);
 
-      bloc
-        ..on<UnknownEvent>((event, emit) async {
-          emit(LoadingState());
-          throw Exception('Ignore me');
-        })
-        ..add(UnknownEvent());
+        bloc
+          ..on<UnknownEvent>((event, emit) async {
+            emit(LoadingState());
+            throw Exception('Ignore me');
+          })
+          ..add(UnknownEvent());
 
-      await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 100));
 
-      expect(states, [isA<LoadingState>()]);
-      expect(bloc.state, isA<LoadingState>());
+        expect(states, [isA<LoadingState>()]);
+        expect(bloc.state, isA<LoadingState>());
 
-      await sub.cancel();
-      await bloc.close();
-    });
+        await sub.cancel();
+        await bloc.close();
+      },
+    );
 
-    test('Logger Data: Logger must receive correct Error and StackTrace', () async {
-      Object? capturedError;
-      StackTrace? capturedStack;
-      final bloc = ErrorHandlerTestBloc()
-        ..logger = ({required tag, required error, required event, required stackTrace}) {
-          capturedError = error;
-          capturedStack = stackTrace;
-        };
+    test(
+      'Logger Data: Logger must receive correct Error and StackTrace',
+      () async {
+        Object? capturedError;
+        StackTrace? capturedStack;
+        final bloc = ErrorHandlerTestBloc()
+          ..logger =
+              ({
+                required tag,
+                required error,
+                required event,
+                required stackTrace,
+              }) {
+                capturedError = error;
+                capturedStack = stackTrace;
+              };
 
-      final testException = Exception('Logger Test Exception');
+        final testException = Exception('Logger Test Exception');
 
-      bloc
-        ..on<RecoveryErrorEvent>((event, emit) async {
-          throw testException;
-        })
-        ..add(RecoveryErrorEvent());
+        bloc
+          ..on<RecoveryErrorEvent>((event, emit) async {
+            throw testException;
+          })
+          ..add(RecoveryErrorEvent());
 
-      await Future.delayed(const Duration(milliseconds: 50));
+        await Future.delayed(const Duration(milliseconds: 50));
 
-      expect(
-        capturedError,
-        same(testException),
-        reason: 'Logger must receive the same error object',
-      );
-      expect(capturedStack, isNotNull, reason: 'StackTrace must not be empty');
-      expect(capturedStack.toString(), contains('bloc_error_control_test.dart'));
+        expect(
+          capturedError,
+          same(testException),
+          reason: 'Logger must receive the same error object',
+        );
+        expect(
+          capturedStack,
+          isNotNull,
+          reason: 'StackTrace must not be empty',
+        );
+        expect(
+          capturedStack.toString(),
+          contains('bloc_error_control_test.dart'),
+        );
 
-      await bloc.close();
-    });
+        await bloc.close();
+      },
+    );
 
     test('Heavy Logger: Logger delay must not block event flow', () async {
       final executionOrder = <String>[];
       final bloc = ErrorHandlerTestBloc()
-        ..logger = ({required tag, required error, required event, required stackTrace}) {
-          final stopwatch = Stopwatch()..start();
-          while (stopwatch.elapsedMilliseconds < 50) {} // Simulate heavy work
-          executionOrder.add('logger_done');
-        }
+        ..logger =
+            ({
+              required tag,
+              required error,
+              required event,
+              required stackTrace,
+            }) {
+              final stopwatch = Stopwatch()..start();
+              while (stopwatch.elapsedMilliseconds < 50) {} // Simulate heavy work
+              executionOrder.add('logger_done');
+            }
         ..on<RecoveryErrorEvent>((event, emit) async {
           executionOrder.add('event_1_error');
           throw Exception('Error 1');
@@ -705,23 +781,26 @@ void main() {
       await bloc.close();
     });
 
-    test('hasActiveTokenForEvent should return true for active event', () async {
-      final bloc = ErrorHandlerTestBloc();
-      final completer = Completer<void>();
-      final event = CustomSequentialEvent(1);
+    test(
+      'hasActiveTokenForEvent should return true for active event',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        final completer = Completer<void>();
+        final event = CustomSequentialEvent(1);
 
-      bloc
-        ..on<CustomSequentialEvent>((event, emit) async {
-          await completer.future;
-        })
-        ..add(event);
-      await Future.delayed(const Duration(milliseconds: 10));
+        bloc
+          ..on<CustomSequentialEvent>((event, emit) async {
+            await completer.future;
+          })
+          ..add(event);
+        await Future.delayed(const Duration(milliseconds: 10));
 
-      expect(bloc.hasActiveTokenForEvent(event), true);
+        expect(bloc.hasActiveTokenForEvent(event), true);
 
-      completer.complete();
-      await bloc.close();
-    });
+        completer.complete();
+        await bloc.close();
+      },
+    );
 
     test('cancelTokensByEventType should cancel specific event type', () async {
       final bloc = ErrorHandlerTestBloc();
@@ -754,9 +833,13 @@ void main() {
       bloc
         ..on<CustomSequentialEvent>((event, emit) async {
           if (event.id == 1) {
-            await bloc.contextToken.whenCancel.then((_) => event1Cancelled = true);
+            await bloc.contextToken.whenCancel.then(
+              (_) => event1Cancelled = true,
+            );
           } else {
-            await bloc.contextToken.whenCancel.then((_) => event2Cancelled = true);
+            await bloc.contextToken.whenCancel.then(
+              (_) => event2Cancelled = true,
+            );
           }
         })
         ..add(event1)
@@ -777,12 +860,9 @@ void main() {
       final completer = Completer<void>();
 
       bloc
-        ..on<CustomSequentialEvent>(
-          (event, emit) async {
-            await completer.future;
-          },
-          timeout: const Duration(milliseconds: 50),
-        )
+        ..on<CustomSequentialEvent>((event, emit) async {
+          await completer.future;
+        }, timeout: const Duration(milliseconds: 50))
         ..add(CustomSequentialEvent(1));
 
       await expectLater(
@@ -799,10 +879,16 @@ void main() {
       var errorLogged = false;
 
       bloc
-        ..logger = ({required tag, required error, required stackTrace, required event}) {
-          errorLogged = true;
-          throw Exception('Logger failed!');
-        }
+        ..logger =
+            ({
+              required tag,
+              required error,
+              required stackTrace,
+              required event,
+            }) {
+              errorLogged = true;
+              throw Exception('Logger failed!');
+            }
         ..on<ErrorEvent>((event, emit) async {
           throw Exception('Test error');
         })
@@ -909,20 +995,26 @@ void main() {
       expect(token.isCancelled, true);
     });
 
-    test('should handle StateError when controller is closed during stream emission', () async {
-      final bloc = ErrorHandlerTestBloc()
-        ..on<CustomSequentialEvent>((event, emit) async {
-          emit(LoadingState());
-          final stream = Stream.periodic(const Duration(milliseconds: 10), (i) => i).take(10);
-          await emit.forEach(stream, onData: DataState.new);
-        })
-        ..add(CustomSequentialEvent(1));
-      await Future.delayed(const Duration(milliseconds: 25));
+    test(
+      'should handle StateError when controller is closed during stream emission',
+      () async {
+        final bloc = ErrorHandlerTestBloc()
+          ..on<CustomSequentialEvent>((event, emit) async {
+            emit(LoadingState());
+            final stream = Stream.periodic(
+              const Duration(milliseconds: 10),
+              (i) => i,
+            ).take(10);
+            await emit.forEach(stream, onData: DataState.new);
+          })
+          ..add(CustomSequentialEvent(1));
+        await Future.delayed(const Duration(milliseconds: 25));
 
-      await bloc.close();
+        await bloc.close();
 
-      expect(bloc.isClosed, true);
-    });
+        expect(bloc.isClosed, true);
+      },
+    );
 
     test('should handle error when closing controller', () async {
       final bloc = ErrorHandlerTestBloc()
@@ -965,24 +1057,27 @@ void main() {
       await subscription.cancel();
     });
 
-    test('should not cancel token that is already cancelled on controller close', () async {
-      final bloc = ErrorHandlerTestBloc();
-      final event = CustomSequentialEvent(1);
-      var cancelCalled = false;
+    test(
+      'should not cancel token that is already cancelled on controller close',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        final event = CustomSequentialEvent(1);
+        var cancelCalled = false;
 
-      bloc
-        ..on<CustomSequentialEvent>((event, emit) async {
-          bloc.contextToken.cancel();
-          cancelCalled = true;
-          await Future.delayed(const Duration(milliseconds: 50));
-        })
-        ..add(event);
-      await Future.delayed(const Duration(milliseconds: 10));
+        bloc
+          ..on<CustomSequentialEvent>((event, emit) async {
+            bloc.contextToken.cancel();
+            cancelCalled = true;
+            await Future.delayed(const Duration(milliseconds: 50));
+          })
+          ..add(event);
+        await Future.delayed(const Duration(milliseconds: 10));
 
-      await bloc.close();
+        await bloc.close();
 
-      expect(cancelCalled, true);
-    });
+        expect(cancelCalled, true);
+      },
+    );
 
     test('should handle error when closing controller throws', () async {
       final bloc = ErrorHandlerTestBloc()
@@ -999,42 +1094,47 @@ void main() {
       expect(bloc.isClosed, true);
     });
 
-    test('should not cancel token that is already cancelled on controller close', () async {
-      final bloc = ErrorHandlerTestBloc();
-      final event = CustomSequentialEvent(1);
-      var tokenWasCancelled = false;
+    test(
+      'should not cancel token that is already cancelled on controller close',
+      () async {
+        final bloc = ErrorHandlerTestBloc();
+        final event = CustomSequentialEvent(1);
+        var tokenWasCancelled = false;
 
-      bloc
-        ..on<CustomSequentialEvent>((event, emit) async {
-          final token = bloc.contextToken..cancel();
-          tokenWasCancelled = token.isCancelled;
-          await Future.delayed(const Duration(milliseconds: 50));
-        })
-        ..add(event);
-      await Future.delayed(const Duration(milliseconds: 10));
+        bloc
+          ..on<CustomSequentialEvent>((event, emit) async {
+            final token = bloc.contextToken..cancel();
+            tokenWasCancelled = token.isCancelled;
+            await Future.delayed(const Duration(milliseconds: 50));
+          })
+          ..add(event);
+        await Future.delayed(const Duration(milliseconds: 10));
 
-      await bloc.close();
+        await bloc.close();
 
-      expect(tokenWasCancelled, true);
-    });
+        expect(tokenWasCancelled, true);
+      },
+    );
 
-    test('should not call super.onError for already reported error', () async {
-      final states = <TestState>[];
-      final bloc = ErrorHandlerTestBloc();
-      final subscription = bloc.stream.listen(states.add);
+    test(
+      'should call BlocObserver.onError when error is not mapped to state',
+      () async {
+        final observer = _CountingBlocObserver();
+        final previousObserver = Bloc.observer;
+        Bloc.observer = observer;
+        addTearDown(() => Bloc.observer = previousObserver);
 
-      bloc
-        ..on<CustomSequentialEvent>((event, emit) async {
-          throw Exception('Test error');
-        })
-        ..add(CustomSequentialEvent(1));
-      await Future.delayed(const Duration(milliseconds: 50));
+        final bloc = ErrorHandlerTestBloc()
+          ..on<UnknownEvent>((event, emit) async {
+            throw Exception('Unhandled test error');
+          })
+          ..add(UnknownEvent());
+        await Future.delayed(const Duration(milliseconds: 50));
 
-      final errorStates = states.whereType<ErrorState>().toList();
-      expect(errorStates.length, 1);
+        expect(observer.onErrorCalls, 1);
 
-      await subscription.cancel();
-      await bloc.close();
-    });
+        await bloc.close();
+      },
+    );
   });
 }

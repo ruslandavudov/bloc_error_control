@@ -72,6 +72,28 @@ void main() {
       await bloc.close();
     });
 
+    test(
+      'mapErrorToSignal should work in parallel with mapErrorToState',
+      () async {
+        final bloc = ErrorStateAndSignalBloc();
+        final caught = [];
+        final states = <int>[];
+
+        final signalSub = bloc.signalsFor<EventA>().listen(caught.add);
+        final stateSub = bloc.stream.listen(states.add);
+
+        bloc.add(EventA());
+        await Future.delayed(const Duration(milliseconds: 50));
+
+        expect(states, contains(42));
+        expect(caught, contains('error_signal_parallel'));
+
+        await signalSub.cancel();
+        await stateSub.cancel();
+        await bloc.close();
+      },
+    );
+
     test('should emit typed signals', () async {
       final bloc = TypedSignalBloc();
       final caught = <MySignal>[];
@@ -153,45 +175,51 @@ void main() {
       await bloc.close();
     });
 
-    test('CancelableDelay should be cancelled when token is cancelled', () async {
-      final bloc = CancelableDelayBloc();
-      final caught = [];
+    test(
+      'CancelableDelay should be cancelled when token is cancelled',
+      () async {
+        final bloc = CancelableDelayBloc();
+        final caught = [];
 
-      bloc.signalsFor<EventA>().listen(caught.add);
+        bloc.signalsFor<EventA>().listen(caught.add);
 
-      // Send three events with restartable()
-      bloc
-        ..add(EventA()) // will be cancelled
-        ..add(EventA()) // will be cancelled
-        ..add(EventA()); // will survive
+        // Send three events with restartable()
+        bloc
+          ..add(EventA()) // will be cancelled
+          ..add(EventA()) // will be cancelled
+          ..add(EventA()); // will survive
 
-      await Future.delayed(const Duration(milliseconds: 250));
+        await Future.delayed(const Duration(milliseconds: 250));
 
-      // Check: 'start' should be present for all three
-      // 'after_delay' — only for the last one
-      final startCount = caught.where((s) => s == 'start').length;
-      final afterDelayCount = caught.where((s) => s == 'after_delay').length;
+        // Check: 'start' should be present for all three
+        // 'after_delay' — only for the last one
+        final startCount = caught.where((s) => s == 'start').length;
+        final afterDelayCount = caught.where((s) => s == 'after_delay').length;
 
-      expect(startCount, equals(3));
-      expect(afterDelayCount, equals(1));
+        expect(startCount, equals(3));
+        expect(afterDelayCount, equals(1));
 
-      await bloc.close();
-    });
+        await bloc.close();
+      },
+    );
 
-    test('CancelableDelay should throw BlocCanceledException when already cancelled', () async {
-      final bloc = CancelableDelayBloc();
+    test(
+      'CancelableDelay should throw BlocCanceledException when already cancelled',
+      () async {
+        final bloc = CancelableDelayBloc();
 
-      // Create a token and cancel it immediately
-      final token = EventCancelToken(event: EventA())..cancel();
+        // Create a token and cancel it immediately
+        final token = EventCancelToken(event: EventA())..cancel();
 
-      // Expect delay to throw an exception
-      expect(
-        () => token.delay(const Duration(milliseconds: 10)),
-        throwsA(isA<BlocCanceledException>()),
-      );
+        // Expect delay to throw an exception
+        expect(
+          () => token.delay(const Duration(milliseconds: 10)),
+          throwsA(isA<BlocCanceledException>()),
+        );
 
-      await bloc.close();
-    });
+        await bloc.close();
+      },
+    );
 
     test('should emit typed signals', () async {
       final bloc = TypedSignalBloc();

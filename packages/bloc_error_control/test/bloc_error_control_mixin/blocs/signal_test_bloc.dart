@@ -49,6 +49,26 @@ class ErrorSignalBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<Te
   }
 }
 
+class ErrorStateAndSignalBloc extends Bloc<TestEvent, int>
+    with BlocErrorControlMixin<TestEvent, int> {
+  @override
+  String get tag => 'ErrorStateAndSignalBloc';
+
+  ErrorStateAndSignalBloc() : super(0) {
+    on<EventA>((event, emit) async {
+      throw Exception('fail');
+    });
+  }
+
+  @override
+  int? mapErrorToState(Object error, StackTrace s, TestEvent? event) => 42;
+
+  @override
+  Object? mapErrorToSignal(Object error, StackTrace stack, TestEvent? event) {
+    return 'error_signal_parallel';
+  }
+}
+
 // Typed signal
 sealed class MySignal {
   const MySignal();

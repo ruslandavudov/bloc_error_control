@@ -1,3 +1,9 @@
+## 1.2.2
+
+- Clarified error handling and signal semantics in the docs.
+- Updated tests for observer behavior and parallel state/signal handling.
+- Fixed analyzer configuration for the package and example.
+
 ## 1.2.0
 - Added Signals (Side Effects) support: a parallel stream for one-time events (Snackbars, Navigation, etc.)
 - Added IBlocControl interface: centralized management of signals, tokens, and diagnostics

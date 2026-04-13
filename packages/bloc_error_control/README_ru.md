@@ -116,6 +116,9 @@ class UserBloc extends Bloc<UserEvent, UserState>
 Чтобы отправить сигнал, используйте метод `emitSignal()`. 
 
 Вы также можете настроить автоматическое превращение ошибок в сигналы через `mapErrorToSignal`.
+Этот поток сигналов работает параллельно со стейтами: одна и та же ошибка может
+одновременно обновить состояние через `mapErrorToState` и отправить одноразовый сигнал
+через `mapErrorToSignal`.
 
 ```dart
 class UserBloc extends Bloc<UserEvent, UserState> with BlocErrorControlMixin<UserEvent, UserState> {
@@ -129,8 +132,8 @@ class UserBloc extends Bloc<UserEvent, UserState> with BlocErrorControlMixin<Use
   
   @override
   Object? mapErrorToSignal(Object error, StackTrace stack, UserEvent? event) {
-    // Если произошла ошибка при лайке поста — не меняем стейт,
-    // а просто уведомляем пользователя через сигнал
+    // Для некоторых событий можно сохранить текущий стейт
+    // и дополнительно уведомить пользователя через сигнал
     if (event is LikePostEvent) {
       return 'Не удалось поставить лайк. Попробуйте позже.';
     }
@@ -162,6 +165,22 @@ BlocSignalListener<UserBloc, UpdateProfileEvent>(
    успели отправиться из его асинхронного кода, будут проигнорированы.
  - **Типобезопасность**: Вы можете передавать в качестве сигнала любые объекты (строки, sealed-классы, 
    DTO).
+
+### Контракт обработки ошибок
+
+`mapErrorToState`, `mapErrorToSignal` и `BlocObserver` — это **независимые каналы**.
+
+- `mapErrorToState` отвечает за устойчивое состояние UI.
+- `mapErrorToSignal` отвечает за одноразовые side effects.
+- `BlocObserver` остаётся глобальным каналом диагностики и логирования.
+
+Из-за этого одна и та же ошибка может одновременно:
+
+- обновить состояние через `mapErrorToState`,
+- отправить сигнал через `mapErrorToSignal`,
+- и при этом остаться видимой в `BlocObserver`.
+
+Это сделано намеренно: реакция UI и глобальная диагностика рассматриваются как разные задачи.
 
 ## Поддерживайте отмену запросов (опционально)
 

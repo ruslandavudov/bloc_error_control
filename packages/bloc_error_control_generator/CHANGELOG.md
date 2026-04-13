@@ -1,3 +1,6 @@
+## 1.2.2
+- Changed dependencies
+
 ## 1.2.0
 - Changed dependencies
 

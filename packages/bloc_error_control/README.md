@@ -117,6 +117,8 @@ In standard BLoC, to display an error notification, developers often add an `err
 To send a signal, use the `emitSignal()` method.
 
 You can also configure automatic transformation of errors into signals via `mapErrorToSignal`.
+This signal stream is parallel to state handling: the same error may both update state
+via `mapErrorToState` and emit a one-time signal via `mapErrorToSignal`.
 
 ```dart
 class UserBloc extends Bloc<UserEvent, UserState> with BlocErrorControlMixin<UserEvent, UserState> {
@@ -130,8 +132,8 @@ class UserBloc extends Bloc<UserEvent, UserState> with BlocErrorControlMixin<Use
   
   @override
   Object? mapErrorToSignal(Object error, StackTrace stack, UserEvent? event) {
-    // If an error occurs while liking a post — don't change the state,
-    // just notify the user via a signal
+    // For some events you can keep the current state
+    // and additionally notify the user via a signal
     if (event is LikePostEvent) {
       return 'Failed to like the post. Please try again later.';
     }
@@ -163,6 +165,22 @@ BlocSignalListener<UserBloc, UpdateProfileEvent>(
 - **Auto-cancellation**: If an event is cancelled (e.g., via restartable), 
   any signals that haven't been sent from its asynchronous code will be ignored.
 - **Type Safety**: You can pass any objects as signals (strings, sealed classes, DTOs).
+
+### Error handling contract
+
+`mapErrorToState`, `mapErrorToSignal`, and `BlocObserver` are **independent channels**.
+
+- `mapErrorToState` is responsible for persistent UI state.
+- `mapErrorToSignal` is responsible for one-time side effects.
+- `BlocObserver` remains a global diagnostics/logging channel.
+
+Because of this, the same exception may:
+
+- update the state via `mapErrorToState`,
+- emit a signal via `mapErrorToSignal`,
+- and still be visible in `BlocObserver`.
+
+This is intentional: UI reaction and global diagnostics are treated as separate concerns.
 
 ## Support request cancellation (optional)
 
