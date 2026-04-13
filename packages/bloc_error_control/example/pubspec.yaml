@@ -9,7 +9,7 @@ environment:
 
 dependencies:
   bloc_concurrency: ^0.3.0
-  bloc_error_control: ^1.2.0
+  bloc_error_control: ^1.2.1
 #    path: ../../bloc_error_control/
   dio: ^5.0.0
   flutter:
@@ -17,9 +17,10 @@ dependencies:
   flutter_bloc: ^9.1.1
 
 dev_dependencies:
-  bloc_error_control_generator: ^1.2.0
+  bloc_error_control_generator: ^1.2.1
 #    path: ../../bloc_error_control_generator/
   build_runner: ^2.4.13
+  flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
 

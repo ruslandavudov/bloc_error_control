@@ -1,3 +1,7 @@
+## 1.2.1
+- Fixed an issue with duplicate logging
+- Improved tests
+
 ## 1.2.0
 - Added Signals (Side Effects) support: a parallel stream for one-time events (Snackbars, Navigation, etc.)
 - Added IBlocControl interface: centralized management of signals, tokens, and diagnostics

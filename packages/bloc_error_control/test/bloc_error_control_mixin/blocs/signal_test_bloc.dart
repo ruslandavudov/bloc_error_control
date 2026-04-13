@@ -10,7 +10,8 @@ class EventA extends TestEvent {}
 class EventB extends TestEvent {}
 
 // Bloc with our magic
-class SignalTestBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<TestEvent, int> {
+class SignalTestBloc extends Bloc<TestEvent, int>
+    with BlocErrorControlMixin<TestEvent, int> {
   @override
   String get tag => 'SignalTestBloc';
 
@@ -30,7 +31,8 @@ class SignalTestBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<Tes
   int? mapErrorToState(Object error, StackTrace s, TestEvent? event) => null;
 }
 
-class ErrorSignalBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<TestEvent, int> {
+class ErrorSignalBloc extends Bloc<TestEvent, int>
+    with BlocErrorControlMixin<TestEvent, int> {
   @override
   String get tag => 'ErrorSignalBloc';
 
@@ -47,6 +49,25 @@ class ErrorSignalBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<Te
   Object? mapErrorToSignal(Object error, StackTrace stack, TestEvent? event) {
     return 'error_signal';
   }
+}
+
+class StateFirstErrorBloc extends Bloc<TestEvent, int>
+    with BlocErrorControlMixin<TestEvent, int> {
+  @override
+  String get tag => 'StateFirstErrorBloc';
+
+  StateFirstErrorBloc() : super(0) {
+    on<EventA>((event, emit) async {
+      throw Exception('fail');
+    });
+  }
+
+  @override
+  int? mapErrorToState(Object error, StackTrace s, TestEvent? event) => 42;
+
+  @override
+  Object? mapErrorToSignal(Object error, StackTrace stack, TestEvent? event) =>
+      'should_not_emit';
 }
 
 // Typed signal
@@ -87,7 +108,8 @@ class NavigateSignal extends MySignal {
 }
 
 // Bloc for typed signals test
-class TypedSignalBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<TestEvent, int> {
+class TypedSignalBloc extends Bloc<TestEvent, int>
+    with BlocErrorControlMixin<TestEvent, int> {
   @override
   String get tag => 'TypedSignalBloc';
 
@@ -104,7 +126,8 @@ class TypedSignalBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<Te
 }
 
 // Bloc for testing signals after close
-class CloseTestBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<TestEvent, int> {
+class CloseTestBloc extends Bloc<TestEvent, int>
+    with BlocErrorControlMixin<TestEvent, int> {
   @override
   String get tag => 'CloseTestBloc';
 
@@ -125,7 +148,8 @@ class CloseTestBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<Test
 }
 
 // Bloc for signalsFor<E> test (all signals)
-class AllSignalsBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<TestEvent, int> {
+class AllSignalsBloc extends Bloc<TestEvent, int>
+    with BlocErrorControlMixin<TestEvent, int> {
   @override
   String get tag => 'AllSignalsBloc';
 
@@ -173,7 +197,8 @@ class ContextAwareErrorBloc extends Bloc<TestEvent, int>
 }
 
 // Bloc for CancelableDelay test
-class CancelableDelayBloc extends Bloc<TestEvent, int> with BlocErrorControlMixin<TestEvent, int> {
+class CancelableDelayBloc extends Bloc<TestEvent, int>
+    with BlocErrorControlMixin<TestEvent, int> {
   @override
   String get tag => 'CancelableDelayBloc';
 

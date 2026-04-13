@@ -130,13 +130,15 @@ typedef ErrorLogger =
 /// └───────────────────────────────────────────────────────────
 /// ```
 // {{REG_BEGIN}}
-mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocControl<E, S> {
+mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S>
+    implements IBlocControl<E, S> {
   static const _eventKey = #app_bloc_handler_event;
   static const _tokenKey = #app_bloc_cancel_token;
   static const _isHandlingErrorKey = #app_bloc_is_handling_error;
   static const _errorReportedKey = #app_bloc_error_reported;
 
   ErrorLogger? _logger;
+  final _handledErrors = Map<Object, bool>.identity();
 
   /// Getter for the error logger.
   ///
@@ -150,7 +152,9 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
         required Object error,
         required StackTrace stackTrace,
         required Object event,
-      }) => debugPrint("[$tag] '${event.runtimeType}'\nError: $error\nStackTrace: $stackTrace");
+      }) => debugPrint(
+        "[$tag] '${event.runtimeType}'\nError: $error\nStackTrace: $stackTrace",
+      );
 
   /// Setter for the error logger.
   ///
@@ -218,7 +222,8 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
   @override
   @protected
   @visibleForTesting
-  Object? mapErrorToSignal(Object error, StackTrace stackTrace, E? event) => null;
+  Object? mapErrorToSignal(Object error, StackTrace stackTrace, E? event) =>
+      null;
 
   @override
   @protected
@@ -270,29 +275,20 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
     Duration timeout = const Duration(seconds: 30),
   }) => super.on<T>(
     handler,
-    transformer: _errorTransformerZone(base: transformer, eventTimeout: timeout),
+    transformer: _errorTransformerZone(
+      base: transformer,
+      eventTimeout: timeout,
+    ),
   );
 
   @override
   @mustCallSuper
   void onError(Object error, StackTrace stackTrace) {
-    // Check for silent errors BEFORE the zone
     if (isGlobalSilent(error, stackTrace)) {
       return;
     }
 
-    _onErrorZone(error, stackTrace);
-    final event = Zone.current[_eventKey] as E?;
-
-    // Attempt to convert error to a signal
-    final errorSignal = mapErrorToSignal(error, stackTrace, event);
-    if (errorSignal != null) {
-      emitSignal(errorSignal);
-    }
-
-    // If the error was already handled in the zone, don't bubble to super
-    final reportedError = Zone.current[_errorReportedKey];
-    if (identical(reportedError, error)) {
+    if (_isErrorHandled(error) || _handleError(error, stackTrace)) {
       return;
     }
 
@@ -360,7 +356,12 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
                   eventTimeout,
                   onTimeout: (sink) {
                     sink
-                      ..addError(EventTimeoutError<T>(event: event, message: 'Event timeout'))
+                      ..addError(
+                        EventTimeoutError<T>(
+                          event: event,
+                          message: 'Event timeout',
+                        ),
+                      )
                       ..close();
                   },
                 );
@@ -374,11 +375,11 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
                 if (e is StateError && e.message.contains('closed')) {
                   break;
                 }
-                _onErrorZone(e, s);
+                _handleError(e, s);
               }
             }
           } on Object catch (e, s) {
-            _onErrorZone(e, s);
+            _handleError(e, s);
           } finally {
             _removeToken(token);
             try {
@@ -386,12 +387,16 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
                 await controller.close();
               }
             } on Object catch (e, s) {
-              _onErrorZone(e, s);
+              _handleError(e, s);
             }
           }
         },
-        _onErrorZone,
-        zoneValues: {_eventKey: event, _tokenKey: token, _isHandlingErrorKey: false},
+        _handleError,
+        zoneValues: {
+          _eventKey: event,
+          _tokenKey: token,
+          _isHandlingErrorKey: false,
+        },
       );
 
       // cast<T> is needed to match the signature of EventTransformer in Bloc
@@ -399,47 +404,64 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
     });
   };
 
-  /// Core error processing logic extracted from standard [onError].
-  void _onErrorZone(Object error, StackTrace stackTrace) {
+  bool _handleError(Object error, StackTrace stackTrace) {
     if (isGlobalSilent(error, stackTrace)) {
-      return;
+      return true;
     }
 
     final event = Zone.current[_eventKey] as E?;
     final isAlreadyHandling = Zone.current[_isHandlingErrorKey] == true;
 
-    if (event != null && !isAlreadyHandling) {
-      try {
-        final errorState =
-            getErrorMapperForEvent(error, stackTrace, event) ??
-            mapErrorToState(error, stackTrace, event);
-
-        // Log asynchronously to avoid blocking the event flow
-        scheduleMicrotask(() {
-          try {
-            logger(error: error, stackTrace: stackTrace, tag: tag, event: event);
-          } on Object catch (e, s) {
-            debugPrint('Failed to log error: $e\nTrace: $s');
-          }
-        });
-
-        final eState = errorState;
-        if (eState is S && !isClosed) {
-          // Emit in a separate zone with a flag to prevent infinite loops
-          runZoned(
-            // ignore: invalid_use_of_visible_for_testing_member
-            () => emit(eState),
-            zoneValues: {
-              _isHandlingErrorKey: true,
-              _errorReportedKey: error,
-            },
-          );
-        }
-      } on Object catch (e, s) {
-        // If state mapping fails, fall back to base onError
-        super.onError(e, s);
-      }
+    if (event == null || isAlreadyHandling) {
+      return false;
     }
+
+    try {
+      final errorState =
+          getErrorMapperForEvent(error, stackTrace, event) ??
+          mapErrorToState(error, stackTrace, event);
+
+      _scheduleErrorLog(error, stackTrace, event);
+
+      final eState = errorState;
+      if (eState is S && !isClosed) {
+        _markErrorHandled(error);
+        runZoned(
+          // ignore: invalid_use_of_visible_for_testing_member
+          () => emit(eState),
+          zoneValues: {_isHandlingErrorKey: true, _errorReportedKey: error},
+        );
+        return true;
+      }
+
+      final errorSignal = mapErrorToSignal(error, stackTrace, event);
+      if (errorSignal != null) {
+        _markErrorHandled(error);
+        emitSignal(errorSignal);
+        return true;
+      }
+    } on Object catch (e, s) {
+      // If mapping fails, fall back to the base onError pipeline.
+      super.onError(e, s);
+    }
+
+    return false;
+  }
+
+  bool _isErrorHandled(Object error) => identical(_handledErrors[error], true);
+
+  void _markErrorHandled(Object error) {
+    _handledErrors[error] = true;
+  }
+
+  void _scheduleErrorLog(Object error, StackTrace stackTrace, E event) {
+    scheduleMicrotask(() {
+      try {
+        logger(error: error, stackTrace: stackTrace, tag: tag, event: event);
+      } on Object catch (e, s) {
+        debugPrint('Failed to log error: $e\nTrace: $s');
+      }
+    });
   }
 
   @override
@@ -497,7 +519,9 @@ mixin BlocErrorControlMixin<E extends Object, S> on Bloc<E, S> implements IBlocC
   bool hasActiveTokenForEvent(E event) {
     final tokens = [..._activeTokens];
 
-    return tokens.any((token) => identical(token.event, event) && !token.isCancelled);
+    return tokens.any(
+      (token) => identical(token.event, event) && !token.isCancelled,
+    );
   }
 
   void _removeToken(EventCancelToken<E> token) {
